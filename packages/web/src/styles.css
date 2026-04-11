@@ -264,6 +264,20 @@ input::placeholder {
   color: var(--ink);
 }
 
+.chip-button.is-selected {
+  background: rgba(213, 166, 82, 0.34);
+  box-shadow: inset 0 0 0 2px rgba(102, 66, 24, 0.26);
+  color: #1e271e;
+  font-weight: 800;
+}
+
+.cta-button:disabled,
+.ghost-button:disabled,
+.chip-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .ghost-button:hover,
 .cta-button:hover,
 .chip-button:hover,
@@ -875,6 +889,23 @@ input::placeholder {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
   gap: 10px;
+}
+
+.chip-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+}
+
+.auction-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.auction-picker__label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .history-panel__body {

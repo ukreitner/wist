@@ -91,7 +91,10 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
   app.use(cors());
   app.use(express.json());
 
-  const staticDir = config.staticDir ?? process.env.WIST_STATIC_DIR ?? path.resolve(process.cwd(), "packages/web/dist");
+  const configuredStaticDir = config.staticDir ?? process.env.WIST_STATIC_DIR;
+  const staticDir = configuredStaticDir
+    ? path.resolve(configuredStaticDir)
+    : path.resolve(process.cwd(), "packages/web/dist");
 
   app.get("/health", (_request, response) => {
     response.json({ ok: true });

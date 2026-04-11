@@ -1,6 +1,6 @@
 import type { RoomSnapshot, SessionHandle } from "./types.js";
 
-const API_BASE = import.meta.env.VITE_SERVER_URL ?? "http://127.0.0.1:4100";
+const API_BASE = import.meta.env.VITE_SERVER_URL ?? "";
 
 const jsonRequest = async <Response>(
   path: string,

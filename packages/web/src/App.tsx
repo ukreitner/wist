@@ -20,9 +20,10 @@ import {
 } from "./storage.js";
 import type { RoomSnapshot, SessionHandle, SnapshotPlayer } from "./types.js";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "http://127.0.0.1:4100";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 const SEATS: Seat[] = ["N", "E", "S", "W"];
 const SUIT_ORDER: Record<Card["suit"], number> = { C: 0, D: 1, H: 2, S: 3 };
+const TRUMP_ORDER: Record<Trump, number> = { C: 0, D: 1, H: 2, S: 3, NT: 4 };
 
 const isPrivateView = (view: PrivatePlayerView | PublicMatchState): view is PrivatePlayerView =>
   "viewerSeat" in view;
@@ -59,14 +60,13 @@ const usePersistentSession = () => {
   return { save, load };
 };
 
-const formatBid = (bid: AuctionBid): string => `${bid.tricks}${bid.trump}`;
 const formatBidChip = (bid: AuctionBid, locale: Locale): string => `${bid.tricks}${trumpLabel(bid.trump, locale)}`;
 const formatTrump = (trump: Trump, locale: Locale): string => trumpLabel(trump, locale);
 
 const sortCards = (cards: Card[]): Card[] =>
   cards
     .slice()
-    .sort((left, right) => left.rank - right.rank || SUIT_ORDER[left.suit] - SUIT_ORDER[right.suit]);
+    .sort((left, right) => SUIT_ORDER[left.suit] - SUIT_ORDER[right.suit] || left.rank - right.rank);
 
 const formatTimestamp = (value: string, locale: Locale): string =>
   new Intl.DateTimeFormat(locale === "he" ? "he-IL" : "en-US", {
@@ -91,6 +91,8 @@ export default function App() {
   const [joinNickname, setJoinNickname] = useState(savedNickname);
   const [joinRoomCode, setJoinRoomCode] = useState("");
   const [selectedPassCards, setSelectedPassCards] = useState<string[]>([]);
+  const [selectedAuctionTrump, setSelectedAuctionTrump] = useState<Trump | null>(null);
+  const [selectedAuctionTricks, setSelectedAuctionTricks] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>(() => loadRecentRooms());
   const [archives, setArchives] = useState<MatchArchive[]>(() => loadArchives());
@@ -112,13 +114,21 @@ export default function App() {
     socketRef.current?.disconnect();
     setSocketState("connecting");
 
-    const socket = io(SERVER_URL, {
-      transports: ["websocket"],
-      auth: {
-        roomCode: nextSession.roomCode,
-        token: nextSession.token
-      }
-    });
+    const socket = SERVER_URL
+      ? io(SERVER_URL, {
+          transports: ["websocket"],
+          auth: {
+            roomCode: nextSession.roomCode,
+            token: nextSession.token
+          }
+        })
+      : io({
+          transports: ["websocket"],
+          auth: {
+            roomCode: nextSession.roomCode,
+            token: nextSession.token
+          }
+        });
 
     socket.on("connect", () => {
       setSocketState("connected");
@@ -212,6 +222,15 @@ export default function App() {
 
     if (privateView.pendingPassSelection?.length) {
       setSelectedPassCards(privateView.pendingPassSelection.map((card) => card.code));
+    }
+  }, [snapshot]);
+
+  useEffect(() => {
+    const privateView = snapshot && isPrivateView(snapshot.view) ? snapshot.view : null;
+
+    if (!privateView?.legalActions.auction) {
+      setSelectedAuctionTrump(null);
+      setSelectedAuctionTricks(null);
     }
   }, [snapshot]);
 
@@ -778,6 +797,30 @@ export default function App() {
     }
 
     const legal = privateView.legalActions;
+    const auctionBids = legal.auction?.bids ?? [];
+    const auctionTrumps = Array.from(new Set(auctionBids.map((bid) => bid.trump))).sort(
+      (left, right) => TRUMP_ORDER[left] - TRUMP_ORDER[right]
+    );
+    const effectiveAuctionTrump =
+      selectedAuctionTrump && auctionTrumps.includes(selectedAuctionTrump)
+        ? selectedAuctionTrump
+        : auctionTrumps[0] ?? null;
+    const auctionNumbers = effectiveAuctionTrump
+      ? Array.from(
+          new Set(auctionBids.filter((bid) => bid.trump === effectiveAuctionTrump).map((bid) => bid.tricks))
+        ).sort((left, right) => left - right)
+      : [];
+    const effectiveAuctionTricks =
+      selectedAuctionTricks && auctionNumbers.includes(selectedAuctionTricks)
+        ? selectedAuctionTricks
+        : auctionNumbers[0] ?? null;
+    const selectedAuctionBid =
+      effectiveAuctionTrump && effectiveAuctionTricks
+        ? auctionBids.find((bid) => bid.trump === effectiveAuctionTrump && bid.tricks === effectiveAuctionTricks) ?? null
+        : null;
+    const auctionSuitLabel = locale === "he" ? "סדרה" : "Suit";
+    const auctionNumberLabel = locale === "he" ? "מספר" : "Number";
+    const submitBidLabel = locale === "he" ? "שלח הצעה" : "Submit Bid";
 
     return (
       <article className="panel sidebar-panel action-panel">
@@ -818,18 +861,44 @@ export default function App() {
             <button type="button" className="ghost-button wide-button" onClick={() => emit("auction.action", { kind: "pass" })}>
               {t.pass}
             </button>
-            <div className="chip-grid">
-              {legal.auction.bids.map((bid) => (
-                <button
-                  key={formatBid(bid)}
-                  type="button"
-                  className="chip-button"
-                  aria-label={`Auction bid ${formatBid(bid)}`}
-                  onClick={() => emit("auction.action", { kind: "bid", bid })}
-                >
-                  {formatBidChip(bid, locale)}
-                </button>
-              ))}
+            <div className="auction-picker">
+              <span className="auction-picker__label">{auctionSuitLabel}</span>
+              <div className="chip-grid chip-grid--compact">
+                {auctionTrumps.map((trump) => (
+                  <button
+                    key={trump}
+                    type="button"
+                    className={`chip-button${effectiveAuctionTrump === trump ? " is-selected" : ""}`}
+                    aria-pressed={effectiveAuctionTrump === trump}
+                    onClick={() => setSelectedAuctionTrump(trump)}
+                  >
+                    {formatTrump(trump, locale)}
+                  </button>
+                ))}
+              </div>
+              <span className="auction-picker__label">{auctionNumberLabel}</span>
+              <div className="chip-grid chip-grid--compact">
+                {auctionNumbers.map((tricks) => (
+                  <button
+                    key={tricks}
+                    type="button"
+                    className={`chip-button${effectiveAuctionTricks === tricks ? " is-selected" : ""}`}
+                    aria-pressed={effectiveAuctionTricks === tricks}
+                    onClick={() => setSelectedAuctionTricks(tricks)}
+                  >
+                    {tricks}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="cta-button wide-button"
+                disabled={!selectedAuctionBid}
+                onClick={() => selectedAuctionBid && emit("auction.action", { kind: "bid", bid: selectedAuctionBid })}
+              >
+                {submitBidLabel}
+                {selectedAuctionBid ? `: ${formatBidChip(selectedAuctionBid, locale)}` : ""}
+              </button>
             </div>
           </div>
         ) : null}
