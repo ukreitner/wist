@@ -1,0 +1,25 @@
+{
+  "name": "wist",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @wist/server\" \"npm run dev -w @wist/web\"",
+    "build": "npm run build -w @wist/core && npm run build -w @wist/server && npm run build -w @wist/web",
+    "test": "npm run test -w @wist/core && npm run test -w @wist/server",
+    "test:e2e": "playwright test",
+    "lint": "npm run typecheck -w @wist/core && npm run typecheck -w @wist/server && npm run typecheck -w @wist/web",
+    "typecheck": "npm run typecheck -w @wist/core && npm run typecheck -w @wist/server && npm run typecheck -w @wist/web",
+    "clean": "rimraf packages/*/dist packages/web/.vite packages/web/playwright-report packages/web/test-results"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@types/node": "^22.13.10",
+    "concurrently": "^9.1.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.2"
+  }
+}
