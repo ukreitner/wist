@@ -59,7 +59,7 @@ describe("scoreHand", () => {
     );
 
     assert.deepEqual(result, {
-      N: 7,
+      N: 2,
       E: -4,
       S: 7,
       W: -4
@@ -73,6 +73,16 @@ describe("scoreHand", () => {
     );
 
     assert.equal(result.W, -3);
+  });
+
+  it("scores zero for everyone when every player misses", () => {
+    assert.deepEqual(
+      scoreHand(
+        { N: 1, E: 5, S: 3, W: 3 },
+        { N: 0, E: 13, S: 0, W: 0 }
+      ),
+      { N: 0, E: 0, S: 0, W: 0 }
+    );
   });
 });
 
@@ -152,7 +162,7 @@ describe("materializeMatch", () => {
     assert.equal(state.awaitingNextHand, true);
     assert.equal(state.completedHands.length, 1);
     assert.deepEqual(state.completedHands[0]?.taken, { N: 0, E: 13, S: 0, W: 0 });
-    assert.deepEqual(state.completedHands[0]?.scoreDelta, { N: -2, E: -8, S: -6, W: -6 });
+    assert.deepEqual(state.completedHands[0]?.scoreDelta, { N: 0, E: 0, S: 0, W: 0 });
   });
 
   it("runs the pass-left cycle twice and reshuffles on the third all-pass", () => {

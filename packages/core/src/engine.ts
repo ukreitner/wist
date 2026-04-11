@@ -331,6 +331,32 @@ const scoreMiss = (totalBids: number, bet: number, taken: number): number => {
   return -difference;
 };
 
+const calculateScoreDelta = (bets: Record<Seat, number>, taken: ScoreMap): ScoreMap => {
+  const results = zeroScores();
+  const allPlayersMissed = SEATS.every((seat) => bets[seat] !== taken[seat]);
+
+  if (allPlayersMissed) {
+    return results;
+  }
+
+  const totalBids = Object.values(bets).reduce((sum, value) => sum + value, 0);
+
+  for (const seat of SEATS) {
+    const bet = bets[seat];
+    const tricksTaken = taken[seat];
+
+    if (bet === 0 && tricksTaken === 0) {
+      results[seat] = 2;
+    } else if (bet === tricksTaken) {
+      results[seat] = bet + 2;
+    } else {
+      results[seat] = scoreMiss(totalBids, bet, tricksTaken);
+    }
+  }
+
+  return results;
+};
+
 const finalizeHand = (state: MatchState, hand: HandState): MatchState => {
   if (!hand.contract) {
     throw new Error("Cannot finalize a hand without a contract.");
@@ -343,21 +369,7 @@ const finalizeHand = (state: MatchState, hand: HandState): MatchState => {
     }),
     { N: 0, E: 0, S: 0, W: 0 }
   );
-  const totalBids = Object.values(bets).reduce((sum, value) => sum + value, 0);
-  const scoreDelta = zeroScores();
-
-  for (const seat of SEATS) {
-    const bet = bets[seat];
-    const taken = hand.taken[seat];
-
-    if (bet === 0 && taken === 0) {
-      scoreDelta[seat] = 7;
-    } else if (bet === taken) {
-      scoreDelta[seat] = bet + 2;
-    } else {
-      scoreDelta[seat] = scoreMiss(totalBids, bet, taken);
-    }
-  }
+  const scoreDelta = calculateScoreDelta(bets, hand.taken);
 
   const cumulativeScores = copyScores(state.scores);
 
@@ -402,25 +414,7 @@ export const compareAuctionBid = (left: AuctionBid, right: AuctionBid): number =
 export const resolveTrick = (plays: PlayedCard[], leader: Seat, trump: Trump): Trick =>
   resolveCurrentTrick({ leader, plays }, trump);
 
-export const scoreHand = (bets: Record<Seat, number>, taken: ScoreMap): ScoreMap => {
-  const totalBids = Object.values(bets).reduce((sum, value) => sum + value, 0);
-  const results = zeroScores();
-
-  for (const seat of SEATS) {
-    const bet = bets[seat];
-    const tricksTaken = taken[seat];
-
-    if (bet === 0 && tricksTaken === 0) {
-      results[seat] = 7;
-    } else if (bet === tricksTaken) {
-      results[seat] = bet + 2;
-    } else {
-      results[seat] = scoreMiss(totalBids, bet, tricksTaken);
-    }
-  }
-
-  return results;
-};
+export const scoreHand = (bets: Record<Seat, number>, taken: ScoreMap): ScoreMap => calculateScoreDelta(bets, taken);
 
 export const createMatch = (options: CreateMatchOptions): MatchState => ({
   version: 1,

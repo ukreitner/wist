@@ -80,6 +80,12 @@ export class RoomManager {
     const manager = new RoomManager(store, config);
 
     for (const room of store.loadRooms()) {
+      if (room.events.length > 0) {
+        room.match = manager.rebuildMatch(room);
+        room.status = room.match.status === "ended" ? "ended" : "active";
+        store.saveRoom(room);
+      }
+
       manager.roomsByCode.set(room.code, room);
 
       for (const session of room.sessions) {

@@ -1,8 +1,7 @@
-import { startTransition, useEffect, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
+import { startTransition, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { io, type Socket } from "socket.io-client";
 import type { AuctionBid, Card, PrivatePlayerView, PublicMatchState, Seat, Trick, Trump } from "@wist/core";
 import { bootstrapRoom, createRoom, joinRoom, rejoinRoom, sessionKey } from "./api.js";
-import HistoryPanel from "./components/HistoryPanel.js";
 import PlayingCard from "./components/PlayingCard.js";
 import { LOCALE_STORAGE_KEY, MESSAGES, phaseLabel, seatLabel, trumpLabel, type Locale } from "./i18n.js";
 import {
@@ -82,6 +81,7 @@ export default function App() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const heldTrickKeyRef = useRef<string | null>(null);
   const heldTrickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextHandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { save, load } = usePersistentSession();
   const savedNickname = loadProfileNickname();
   const [session, setSession] = useState<SessionHandle | null>(null);
@@ -97,13 +97,13 @@ export default function App() {
   const [selectedAuctionTricks, setSelectedAuctionTricks] = useState<number | null>(null);
   const [heldCompletedTrick, setHeldCompletedTrick] = useState<Trick | null>(null);
   const [lastCompletedTrick, setLastCompletedTrick] = useState<Trick | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>(() => loadRecentRooms());
   const [archives, setArchives] = useState<MatchArchive[]>(() => loadArchives());
   const [selectedArchiveId, setSelectedArchiveId] = useState<string | null>(null);
 
   const t = MESSAGES[locale];
   const isRtl = locale === "he";
+  const socketStateLabel = socketState === "connected" ? t.connected : socketState === "connecting" ? t.connection : t.away;
 
   const rememberSession = (nextSession: SessionHandle): void => {
     save(nextSession);
@@ -258,6 +258,10 @@ export default function App() {
       if (heldTrickTimerRef.current) {
         clearTimeout(heldTrickTimerRef.current);
       }
+
+      if (nextHandTimerRef.current) {
+        clearTimeout(nextHandTimerRef.current);
+      }
     },
     []
   );
@@ -267,9 +271,6 @@ export default function App() {
   const rejoinUrl = (roomCode: string, token: string): string =>
     `${window.location.origin}${window.location.pathname}?room=${roomCode}&token=${token}`;
 
-  const currentArchive = snapshot
-    ? archiveFromSnapshot(snapshot, session, archives.find((archive) => archive.id === snapshot.roomCode) ?? null)
-    : null;
   const selectedArchive = archives.find((archive) => archive.id === selectedArchiveId) ?? null;
 
   const downloadArchive = (archive: MatchArchive): void => {
@@ -326,19 +327,25 @@ export default function App() {
     }
   };
 
-  const saveCurrentArchive = (): void => {
-    if (!currentArchive) {
-      return;
-    }
-
-    setArchives((current) => saveArchive(currentArchive, current));
-    setSelectedArchiveId(currentArchive.id);
-    setError(null);
-  };
-
   const emit = (eventName: string, payload?: unknown): void => {
     socketRef.current?.emit(eventName, payload);
   };
+
+  useEffect(() => {
+    if (nextHandTimerRef.current) {
+      clearTimeout(nextHandTimerRef.current);
+      nextHandTimerRef.current = null;
+    }
+
+    if (!snapshot?.controls.canStartNextHand) {
+      return;
+    }
+
+    nextHandTimerRef.current = setTimeout(() => {
+      emit("match.nextHand");
+      nextHandTimerRef.current = null;
+    }, 2200);
+  }, [snapshot?.controls.canStartNextHand, snapshot?.match.completedHands.length]);
 
   const copyText = async (value: string): Promise<void> => {
     try {
@@ -643,11 +650,11 @@ export default function App() {
   );
 
   const renderRoomTools = () => (
-    <article className="panel sidebar-panel room-tools-panel">
+    <article className="panel sidebar-panel rejoin-panel">
       <header className="sidebar-panel__header">
         <div>
-          <span className="panel-kicker">{t.roomTools}</span>
-          <h2>{t.roomTools}</h2>
+          <span className="panel-kicker">{t.room}</span>
+          <h2>{t.copyRejoinLink}</h2>
         </div>
       </header>
       <div className="room-tools__body">
@@ -656,42 +663,16 @@ export default function App() {
           <strong>{snapshot?.roomCode}</strong>
         </div>
         <div className="room-tools__actions">
-          <button type="button" className="ghost-button wide-button" onClick={() => void copyText(snapshot?.roomCode ?? "")}>
-            {t.copyCode}
-          </button>
           <button
             type="button"
-            className="ghost-button wide-button"
-            onClick={() => (snapshot ? void copyText(roomUrl(snapshot.roomCode)) : undefined)}
-          >
-            {t.copyInviteLink}
-          </button>
-          <button
-            type="button"
-            className="ghost-button wide-button"
+            className="cta-button wide-button"
             onClick={() => (snapshot && session ? void copyText(rejoinUrl(snapshot.roomCode, session.token)) : undefined)}
           >
             {t.copyRejoinLink}
           </button>
-          <button type="button" className="ghost-button wide-button" onClick={saveCurrentArchive}>
-            {t.saveToDevice}
-          </button>
-          <button
-            type="button"
-            className="ghost-button wide-button"
-            onClick={() => (currentArchive ? downloadArchive(currentArchive) : undefined)}
-          >
-            {t.exportHistory}
-          </button>
-          <button type="button" className="ghost-button wide-button" onClick={() => importInputRef.current?.click()}>
-            {t.importHistory}
-          </button>
         </div>
-        <p className="panel-muted">{t.rejoinHint}</p>
         {snapshot?.controls.canEndMatch ? (
           <div className="room-tools__danger">
-            <span className="panel-kicker">{t.roomManagement}</span>
-            <p className="panel-muted">{t.endMatchHint}</p>
             <button type="button" className="ghost-button subtle-danger wide-button" onClick={() => emit("match.end")}>
               {t.endMatch}
             </button>
@@ -712,7 +693,7 @@ export default function App() {
           <p className="header-copy">{t.rejoinHint}</p>
         </div>
         <div className="header-stack">
-          <span className={`connection-pill ${socketState}`}>{socketState}</span>
+          <span className={`connection-pill ${socketState}`}>{socketStateLabel}</span>
           {renderLanguageToggle()}
         </div>
       </header>
@@ -980,11 +961,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {snapshot.controls.canStartNextHand ? (
-          <button type="button" className="cta-button wide-button" onClick={() => emit("match.nextHand")}>
-            {t.dealNextHand}
-          </button>
-        ) : null}
+        {snapshot.controls.canStartNextHand ? <p className="panel-muted">{t.dealNextHand}</p> : null}
       </article>
     );
   };
@@ -998,15 +975,23 @@ export default function App() {
     return (
       <article key={seat} className={`seat-panel seat-panel--table seat-${seat.toLowerCase()} ${isTurn ? "is-active" : ""}`}>
         <div className="seat-panel__header">
-          <span>{player?.connected ? t.connected : t.away}</span>
+          <span
+            className={`seat-status ${player?.connected ? "is-on" : "is-off"}`}
+            aria-label={player?.connected ? t.connected : t.away}
+            title={player?.connected ? t.connected : t.away}
+          >
+            <i aria-hidden="true" />
+          </span>
           <strong>{player?.nickname ?? fallbackPlayerName(seat)}</strong>
         </div>
         <div className="seat-panel__meta">
-          <span>
-            {t.bid} {bet ?? "-"}
+          <span className="seat-stat">
+            <small>{t.bid}</small>
+            <strong>{bet ?? "-"}</strong>
           </span>
-          <span>
-            {t.taken} {taken}
+          <span className="seat-stat">
+            <small>{t.taken}</small>
+            <strong>{taken}</strong>
           </span>
         </div>
       </article>
@@ -1126,6 +1111,76 @@ export default function App() {
     );
   };
 
+  const renderTrumpBanner = () => {
+    if (!currentHand?.contract) {
+      return null;
+    }
+
+    const trumpText = locale === "he" ? "שליט" : "Trump";
+
+    return (
+      <div className="trump-banner">
+        <span>{trumpText}</span>
+        <strong>{formatTrump(currentHand.contract.trump, locale)}</strong>
+        <em>
+          {currentHand.contract.tricks} {t.by} {playerNameForSeat(currentHand.contract.bidder)}
+        </em>
+      </div>
+    );
+  };
+
+  const renderScorePanel = () => {
+    const hands = publicMatch?.completedHands ?? [];
+    const totalLabel = locale === "he" ? "סה״כ" : "Total";
+    const scoreTableLabel = locale === "he" ? "טבלת ניקוד" : "Score Table";
+    const signed = (value: number): string => (value > 0 ? `+${value}` : String(value));
+
+    return (
+      <article className="panel sidebar-panel score-table-panel">
+        <header className="sidebar-panel__header">
+          <div>
+            <span className="panel-kicker">{t.score}</span>
+            <h2>{scoreTableLabel}</h2>
+          </div>
+        </header>
+        <div className="score-table" role="table" aria-label={scoreTableLabel}>
+          <div className="score-table__row score-table__row--head" role="row">
+            <span role="columnheader">{t.hand}</span>
+            {SEATS.map((seat) => (
+              <span key={`score-head-${seat}`} role="columnheader">
+                {playerNameForSeat(seat)}
+              </span>
+            ))}
+          </div>
+          <div className="score-table__row score-table__row--total" role="row">
+            <strong role="cell">{totalLabel}</strong>
+            {SEATS.map((seat) => (
+              <strong key={`score-total-${seat}`} role="cell">
+                {publicMatch?.scores[seat] ?? 0}
+              </strong>
+            ))}
+          </div>
+          {hands.length === 0 ? <p className="panel-muted">{t.noCompletedHands}</p> : null}
+          {hands
+            .slice()
+            .reverse()
+            .map((hand) => (
+              <div key={`score-hand-${hand.id}`} className="score-table__row" role="row">
+                <span role="cell">
+                  {t.hand} {hand.id}
+                </span>
+                {SEATS.map((seat) => (
+                  <span key={`score-hand-${hand.id}-${seat}`} role="cell">
+                    {signed(hand.scoreDelta[seat])}
+                  </span>
+                ))}
+              </div>
+            ))}
+        </div>
+      </article>
+    );
+  };
+
   const renderHand = () => {
     if (!privateView) {
       return null;
@@ -1145,11 +1200,10 @@ export default function App() {
           <div className="hand-panel__meta">
             {snapshot?.me.isHost ? <span className="badge">{t.hostBadge}</span> : null}
             {canPass ? <span className="badge">{selectedPassCards.length}/3</span> : null}
-            <span className={`connection-pill ${socketState}`}>{socketState}</span>
           </div>
         </header>
 
-        <div className="hand-fan" style={{ "--card-count": String(Math.max(sortedHand.length, 1)) } as CSSProperties}>
+        <div className="hand-fan">
           {sortedHand.map((card) => {
             const selected = selectedPassCards.includes(card.code);
             const playable = legalCardCodes.has(card.code);
@@ -1198,13 +1252,10 @@ export default function App() {
       <main className={`shell app-root table-shell ${isRtl ? "is-rtl" : ""}`} dir={isRtl ? "rtl" : "ltr"}>
       <header className="room-header room-header--table">
         <div>
-          <span className="hero-card__eyebrow">
-            {t.room} {snapshot?.roomCode}
-          </span>
+          <span className="hero-card__eyebrow">WIST</span>
           <h1>{t.tableInMotion}</h1>
         </div>
         <div className="header-stack">
-          <span className={`connection-pill ${socketState}`}>{socketState}</span>
           {currentHand?.contract ? (
             <span className="contract-pill">
               {t.contract} {currentHand.contract.tricks}
@@ -1220,15 +1271,6 @@ export default function App() {
           )}
         </div>
       </header>
-
-      <section className="score-rail">
-        {SEATS.map((seat) => (
-          <div key={seat} className="score-chip">
-            <span>{playerNameForSeat(seat)}</span>
-            <strong>{publicMatch?.scores[seat] ?? 0}</strong>
-          </div>
-        ))}
-      </section>
 
       <section className="table-layout">
         <div className="table-main">
@@ -1247,6 +1289,7 @@ export default function App() {
                   </span>
                 ) : null}
               </div>
+              {renderTrumpBanner()}
 
               {currentHand?.phase === "auction" ? (
                 renderAuctionBoard()
@@ -1273,13 +1316,7 @@ export default function App() {
         <aside className="table-sidebar">
           {renderActionPanel()}
           {renderRoomTools()}
-          <HistoryPanel
-            locale={locale}
-            open={historyOpen}
-            hands={publicMatch?.completedHands ?? []}
-            playerNameForSeat={playerNameForSeat}
-            onToggle={() => setHistoryOpen((value) => !value)}
-          />
+          {renderScorePanel()}
         </aside>
       </section>
       {error ? <p className="error-banner">{error}</p> : null}

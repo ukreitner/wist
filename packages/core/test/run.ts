@@ -60,7 +60,7 @@ const tests: Array<{ name: string; run: () => void }> = [
           { N: 0, E: 2, S: 5, W: 6 }
         ),
         {
-          N: 7,
+          N: 2,
           E: -4,
           S: 7,
           W: -4
@@ -72,6 +72,13 @@ const tests: Array<{ name: string; run: () => void }> = [
           { N: 4, E: 4, S: 4, W: 1 }
         ).W,
         -3
+      );
+      assert.deepEqual(
+        scoreHand(
+          { N: 1, E: 5, S: 3, W: 3 },
+          { N: 0, E: 13, S: 0, W: 0 }
+        ),
+        { N: 0, E: 0, S: 0, W: 0 }
       );
     }
   },
@@ -147,7 +154,7 @@ const tests: Array<{ name: string; run: () => void }> = [
       assert.equal(state.awaitingNextHand, true);
       assert.equal(state.completedHands.length, 1);
       assert.deepEqual(state.completedHands[0]?.taken, { N: 0, E: 13, S: 0, W: 0 });
-      assert.deepEqual(state.completedHands[0]?.scoreDelta, { N: -1, E: 7, S: -3, W: -3 });
+      assert.deepEqual(state.completedHands[0]?.scoreDelta, { N: 0, E: 0, S: 0, W: 0 });
     }
   },
   {

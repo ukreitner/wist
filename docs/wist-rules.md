@@ -134,7 +134,8 @@ Let:
 
 The scoring rule currently specified is:
 
-- If `b = t = 0`, score `7`
+- If all four players miss their exact-trick bet (`b != t` for everyone), every score delta is `0`
+- If `b = t = 0`, score `2`
 - If `b = t > 0`, score `b + 2`
 - If `b != t`:
   - When `B < 13` and the player took too few tricks (`t < b`), score `-2d`

@@ -105,7 +105,7 @@ const passAuctionAndBet = async (pages: { host: Page; east: Page; south: Page; w
   await pages.host.getByRole("button", { name: "Bet 1", exact: true }).click();
 };
 
-test("four players can start and complete a full deterministic hand with visible history", async ({ browser, request }) => {
+test("four players can start and complete a full deterministic hand with visible scoring", async ({ browser, request }) => {
   const players = await createRoomSet(request);
   const hostPage = await openPlayerPage(browser, players.host.roomCode, players.host.playerToken);
   const eastPage = await openPlayerPage(browser, players.east.roomCode, players.east.playerToken);
@@ -131,8 +131,7 @@ test("four players can start and complete a full deterministic hand with visible
     await hostPage.getByRole("button", { name: clubs[index]! }).click();
   }
 
-  await expect(hostPage.getByRole("button", { name: "Deal Next Hand" })).toBeVisible();
-  await hostPage.getByRole("button", { name: "Show History" }).click();
+  await expect(hostPage.getByRole("heading", { name: "Score Table" })).toBeVisible();
   await expect(hostPage.getByText("Hand 1")).toBeVisible();
   await hostPage.goto("/");
   await expect(hostPage.getByRole("heading", { name: "Recent Rooms" })).toBeVisible();

@@ -73,15 +73,15 @@ const PIP_LAYOUTS: Record<number, Pip[]> = {
     { x: 122, y: 198, flipped: true }
   ],
   9: [
-    { x: 58, y: 58 },
-    { x: 122, y: 58 },
-    { x: 90, y: 88 },
-    { x: 58, y: 118 },
-    { x: 122, y: 118 },
-    { x: 90, y: 148, flipped: true },
-    { x: 58, y: 178, flipped: true },
-    { x: 122, y: 178, flipped: true },
-    { x: 90, y: 208, flipped: true }
+    { x: 58, y: 54 },
+    { x: 122, y: 54 },
+    { x: 58, y: 104 },
+    { x: 122, y: 104 },
+    { x: 90, y: 130 },
+    { x: 58, y: 156, flipped: true },
+    { x: 122, y: 156, flipped: true },
+    { x: 58, y: 206, flipped: true },
+    { x: 122, y: 206, flipped: true }
   ],
   10: [
     { x: 58, y: 56 },
@@ -117,7 +117,13 @@ const rankLabel = (rank: number): string => {
   return "A";
 };
 
-const suitColor = (suit: Card["suit"]): string => (suit === "H" || suit === "D" ? "#b4312d" : "#152130");
+const suitColor = (suit: Card["suit"]): string =>
+  ({
+    C: "#207344",
+    D: "#2563a8",
+    H: "#b4312d",
+    S: "#152130"
+  })[suit];
 
 const pipSize = (rank: number): number => {
   if (rank <= 3) {
