@@ -385,6 +385,15 @@ export default function App() {
     }
   });
 
+  const fallbackPlayerName = (seat: Seat): string => `${t.player} ${SEATS.indexOf(seat) + 1}`;
+  const playerNameForSeat = (seat: Seat): string => seatPlayers.get(seat)?.nickname ?? fallbackPlayerName(seat);
+  const archivePlayerNameForSeat = (archive: MatchArchive, seat: Seat): string =>
+    archive.playerNames?.[seat] ?? fallbackPlayerName(seat);
+  const formatSeatNumbers = (values: Record<Seat, number>, labelForSeat: (seat: Seat) => string): string =>
+    SEATS.map((seat) => `${labelForSeat(seat)} ${values[seat]}`).join(" / ");
+  const formatScoreDelta = (values: Record<Seat, number>, labelForSeat: (seat: Seat) => string): string =>
+    SEATS.map((seat) => `${labelForSeat(seat)} ${values[seat] >= 0 ? `+${values[seat]}` : values[seat]}`).join(" / ");
+
   useEffect(() => {
     const completedTricks = currentHand?.completedTricks ?? [];
     const latestTrick = completedTricks.at(-1) ?? null;
@@ -471,36 +480,25 @@ export default function App() {
                 {t.hand} {hand.id}
               </strong>
               <span>
-                {t.dealer} {seatLabel(hand.dealer, locale)}
+                {t.dealer} {archivePlayerNameForSeat(archive, hand.dealer)}
               </span>
             </div>
             <span>
               {hand.contract.tricks}
-              {trumpLabel(hand.contract.trump, locale)} {t.by} {seatLabel(hand.contract.bidder, locale)}
+              {trumpLabel(hand.contract.trump, locale)} {t.by} {archivePlayerNameForSeat(archive, hand.contract.bidder)}
             </span>
           </header>
           <div className="history-hand__row">
             <span>{t.bid}</span>
-            <span>
-              {seatLabel("N", locale)} {hand.bets.N} / {seatLabel("E", locale)} {hand.bets.E} / {seatLabel("S", locale)} {hand.bets.S} /{" "}
-              {seatLabel("W", locale)} {hand.bets.W}
-            </span>
+            <span>{formatSeatNumbers(hand.bets, (seat) => archivePlayerNameForSeat(archive, seat))}</span>
           </div>
           <div className="history-hand__row">
             <span>{t.taken}</span>
-            <span>
-              {seatLabel("N", locale)} {hand.taken.N} / {seatLabel("E", locale)} {hand.taken.E} / {seatLabel("S", locale)} {hand.taken.S} /{" "}
-              {seatLabel("W", locale)} {hand.taken.W}
-            </span>
+            <span>{formatSeatNumbers(hand.taken, (seat) => archivePlayerNameForSeat(archive, seat))}</span>
           </div>
           <div className="history-hand__row">
             <span>{t.score}</span>
-            <span>
-              {seatLabel("N", locale)} {hand.scoreDelta.N >= 0 ? `+${hand.scoreDelta.N}` : hand.scoreDelta.N} /{" "}
-              {seatLabel("E", locale)} {hand.scoreDelta.E >= 0 ? `+${hand.scoreDelta.E}` : hand.scoreDelta.E} /{" "}
-              {seatLabel("S", locale)} {hand.scoreDelta.S >= 0 ? `+${hand.scoreDelta.S}` : hand.scoreDelta.S} /{" "}
-              {seatLabel("W", locale)} {hand.scoreDelta.W >= 0 ? `+${hand.scoreDelta.W}` : hand.scoreDelta.W}
-            </span>
+            <span>{formatScoreDelta(hand.scoreDelta, (seat) => archivePlayerNameForSeat(archive, seat))}</span>
           </div>
         </article>
       ));
@@ -570,7 +568,7 @@ export default function App() {
               <div className="archive-score-grid">
                 {SEATS.map((seat) => (
                   <div key={`${selectedArchive.id}-${seat}`} className="score-chip">
-                    <span>{seatLabel(seat, locale)}</span>
+                    <span>{archivePlayerNameForSeat(selectedArchive, seat)}</span>
                     <strong>{selectedArchive.scores[seat]}</strong>
                   </div>
                 ))}
@@ -1000,11 +998,10 @@ export default function App() {
     return (
       <article key={seat} className={`seat-panel seat-panel--table seat-${seat.toLowerCase()} ${isTurn ? "is-active" : ""}`}>
         <div className="seat-panel__header">
-          <span>{seatLabel(seat, locale)}</span>
-          <strong>{player?.nickname ?? t.openSeat}</strong>
+          <span>{player?.connected ? t.connected : t.away}</span>
+          <strong>{player?.nickname ?? fallbackPlayerName(seat)}</strong>
         </div>
         <div className="seat-panel__meta">
-          <span>{player?.connected ? t.connected : t.away}</span>
           <span>
             {t.bid} {bet ?? "-"}
           </span>
@@ -1030,12 +1027,12 @@ export default function App() {
     const recentActions = currentHand.auctionLog.slice(-8);
     const highestText =
       currentHand.highestBid && currentHand.highestBidder
-        ? `${formatBidChip(currentHand.highestBid, locale)} ${t.by} ${seatLabel(currentHand.highestBidder, locale)}`
+        ? `${formatBidChip(currentHand.highestBid, locale)} ${t.by} ${playerNameForSeat(currentHand.highestBidder)}`
         : locale === "he"
           ? "אין הצעה עדיין"
           : "No bid yet";
     const turnText = currentTurn
-      ? `${locale === "he" ? "עכשיו" : "Now"}: ${seatLabel(currentTurn, locale)}`
+      ? `${locale === "he" ? "עכשיו" : "Now"}: ${playerNameForSeat(currentTurn)}`
       : t.waiting;
     const latestLabel = locale === "he" ? "פעולה אחרונה" : "Last action";
     const highestLabel = locale === "he" ? "ההצעה המובילה" : "Current highest";
@@ -1061,15 +1058,13 @@ export default function App() {
           {SEATS.map((seat) => {
             const isHighest = currentHand.highestBidder === seat;
             const isTurn = currentTurn === seat;
-            const player = seatPlayers.get(seat);
-
             return (
               <div
                 key={`auction-${seat}`}
                 className={`auction-seat${isHighest ? " is-highest" : ""}${isTurn ? " is-turn" : ""}`}
               >
-                <span>{seatLabel(seat, locale)}</span>
-                <strong>{player?.nickname ?? t.openSeat}</strong>
+                <span>{isTurn ? t.turn : t.player}</span>
+                <strong>{playerNameForSeat(seat)}</strong>
                 <b>{actionText(seat)}</b>
               </div>
             );
@@ -1084,7 +1079,7 @@ export default function App() {
             <div>
               {recentActions.map((entry) => (
                 <strong key={entry.eventId}>
-                  {seatLabel(entry.seat, locale)}{" "}
+                  {playerNameForSeat(entry.seat)}{" "}
                   {entry.kind === "bid" && entry.bid ? formatBidChip(entry.bid, locale) : t.pass}
                 </strong>
               ))}
@@ -1098,7 +1093,7 @@ export default function App() {
   const renderTrickCards = (plays: Trick["plays"]) =>
     plays.map((play) => (
       <div key={`${play.seat}-${play.card.code}`} className={`trick-card trick-card--${play.seat.toLowerCase()}`}>
-        <span>{seatLabel(play.seat, locale)}</span>
+        <span>{playerNameForSeat(play.seat)}</span>
         <PlayingCard card={play.card} />
       </div>
     ));
@@ -1116,13 +1111,13 @@ export default function App() {
         <div>
           <span>{lastTrickLabel}</span>
           <strong>
-            {wonByLabel} {seatLabel(lastCompletedTrick.winner, locale)}
+            {wonByLabel} {playerNameForSeat(lastCompletedTrick.winner)}
           </strong>
         </div>
         <div className="last-trick-tray__cards">
           {lastCompletedTrick.plays.map((play) => (
             <div key={`last-${play.seat}-${play.card.code}`} className="last-trick-card">
-              <span>{seatLabel(play.seat, locale)}</span>
+              <span>{playerNameForSeat(play.seat)}</span>
               <PlayingCard card={play.card} />
             </div>
           ))}
@@ -1145,7 +1140,7 @@ export default function App() {
         <header className="hand-panel__header">
           <div>
             <span className="hero-card__eyebrow">{t.yourSeat}</span>
-            <h2>{seatLabel(privateView.viewerSeat, locale)}</h2>
+            <h2>{snapshot?.me.nickname ?? playerNameForSeat(privateView.viewerSeat)}</h2>
           </div>
           <div className="hand-panel__meta">
             {snapshot?.me.isHost ? <span className="badge">{t.hostBadge}</span> : null}
@@ -1213,12 +1208,12 @@ export default function App() {
           {currentHand?.contract ? (
             <span className="contract-pill">
               {t.contract} {currentHand.contract.tricks}
-              {formatTrump(currentHand.contract.trump, locale)} {t.by} {seatLabel(currentHand.contract.bidder, locale)}
+              {formatTrump(currentHand.contract.trump, locale)} {t.by} {playerNameForSeat(currentHand.contract.bidder)}
             </span>
           ) : currentHand?.highestBid ? (
             <span className="contract-pill">
               {t.highBid} {currentHand.highestBid.tricks}
-              {formatTrump(currentHand.highestBid.trump, locale)} {t.by} {seatLabel(currentHand.highestBidder!, locale)}
+              {formatTrump(currentHand.highestBid.trump, locale)} {t.by} {playerNameForSeat(currentHand.highestBidder!)}
             </span>
           ) : (
             <span className="contract-pill">{t.auctionOpening}</span>
@@ -1229,7 +1224,7 @@ export default function App() {
       <section className="score-rail">
         {SEATS.map((seat) => (
           <div key={seat} className="score-chip">
-            <span>{seatLabel(seat, locale)}</span>
+            <span>{playerNameForSeat(seat)}</span>
             <strong>{publicMatch?.scores[seat] ?? 0}</strong>
           </div>
         ))}
@@ -1243,12 +1238,12 @@ export default function App() {
             <div className="table-center">
               <div className="table-center__status">
                 <span>
-                  {t.dealer} {seatLabel(publicMatch?.dealer ?? "N", locale)}
+                  {t.dealer} {playerNameForSeat(publicMatch?.dealer ?? "N")}
                 </span>
                 <span>{statusText}</span>
                 {currentTurn ? (
                   <span>
-                    {t.turn} {seatLabel(currentTurn, locale)}
+                    {t.turn} {playerNameForSeat(currentTurn)}
                   </span>
                 ) : null}
               </div>
@@ -1261,7 +1256,7 @@ export default function App() {
                     {renderTrickCards(visibleTrickPlays)}
                     {heldCompletedTrick && activeTrickPlays.length === 0 ? (
                       <span className="trick-cluster__winner">
-                        {locale === "he" ? "לקיחה ל" : "Trick to"} {seatLabel(heldCompletedTrick.winner, locale)}
+                        {locale === "he" ? "לקיחה ל" : "Trick to"} {playerNameForSeat(heldCompletedTrick.winner)}
                       </span>
                     ) : null}
                     {visibleTrickPlays.length === 0 ? <p>{t.currentTrickEmpty}</p> : null}
@@ -1278,7 +1273,13 @@ export default function App() {
         <aside className="table-sidebar">
           {renderActionPanel()}
           {renderRoomTools()}
-          <HistoryPanel locale={locale} open={historyOpen} hands={publicMatch?.completedHands ?? []} onToggle={() => setHistoryOpen((value) => !value)} />
+          <HistoryPanel
+            locale={locale}
+            open={historyOpen}
+            hands={publicMatch?.completedHands ?? []}
+            playerNameForSeat={playerNameForSeat}
+            onToggle={() => setHistoryOpen((value) => !value)}
+          />
         </aside>
       </section>
       {error ? <p className="error-banner">{error}</p> : null}

@@ -1,4 +1,4 @@
-import type { HandSummary, ScoreMap } from "@wist/core";
+import type { HandSummary, ScoreMap, Seat } from "@wist/core";
 import type { RoomSnapshot, SessionHandle } from "./types.js";
 
 const PROFILE_STORAGE_KEY = "wist.profile.v1";
@@ -23,6 +23,7 @@ export interface MatchArchive {
   savedAt: string;
   updatedAt: string;
   exportedBy: string | null;
+  playerNames?: Partial<Record<Seat, string>>;
   scores: ScoreMap;
   completedHands: HandSummary[];
   status: "waiting" | "active" | "ended";
@@ -115,6 +116,11 @@ export const archiveFromSnapshot = (
   savedAt: existingArchive?.savedAt ?? new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   exportedBy: session?.nickname ?? snapshot.me.nickname ?? null,
+  playerNames: Object.fromEntries(
+    snapshot.players
+      .filter((player): player is typeof player & { seat: Seat } => Boolean(player.seat))
+      .map((player) => [player.seat, player.nickname])
+  ) as Partial<Record<Seat, string>>,
   scores: snapshot.match.scores,
   completedHands: snapshot.match.completedHands,
   status: snapshot.match.status
@@ -146,6 +152,7 @@ export const parseArchiveText = (text: string): MatchArchive => {
     savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date().toISOString(),
     updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : new Date().toISOString(),
     exportedBy: typeof candidate.exportedBy === "string" ? candidate.exportedBy : null,
+    playerNames: candidate.playerNames,
     scores: candidate.scores,
     completedHands: candidate.completedHands,
     status: candidate.status === "waiting" || candidate.status === "active" || candidate.status === "ended" ? candidate.status : "ended"

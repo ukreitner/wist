@@ -1,18 +1,23 @@
-import type { HandSummary } from "@wist/core";
+import type { HandSummary, Seat } from "@wist/core";
 import type { Locale } from "../i18n.js";
-import { MESSAGES, seatLabel, trumpLabel } from "../i18n.js";
+import { MESSAGES, trumpLabel } from "../i18n.js";
 
 interface HistoryPanelProps {
   locale: Locale;
   open: boolean;
   hands: HandSummary[];
+  playerNameForSeat: (seat: Seat) => string;
   onToggle: () => void;
 }
 
-export default function HistoryPanel({ locale, open, hands, onToggle }: HistoryPanelProps) {
+const SEATS: Seat[] = ["N", "E", "S", "W"];
+
+export default function HistoryPanel({ locale, open, hands, playerNameForSeat, onToggle }: HistoryPanelProps) {
   const t = MESSAGES[locale];
-  const seatStats = (values: Record<"N" | "E" | "S" | "W", number>) =>
-    `${seatLabel("N", locale)} ${values.N} / ${seatLabel("E", locale)} ${values.E} / ${seatLabel("S", locale)} ${values.S} / ${seatLabel("W", locale)} ${values.W}`;
+  const seatStats = (values: Record<Seat, number>) =>
+    SEATS.map((seat) => `${playerNameForSeat(seat)} ${values[seat]}`).join(" / ");
+  const scoreDelta = (values: Record<Seat, number>) =>
+    SEATS.map((seat) => `${playerNameForSeat(seat)} ${values[seat] >= 0 ? `+${values[seat]}` : values[seat]}`).join(" / ");
 
   return (
     <article className="panel sidebar-panel history-panel">
@@ -40,12 +45,12 @@ export default function HistoryPanel({ locale, open, hands, onToggle }: HistoryP
                       {t.hand} {hand.id}
                     </strong>
                     <span>
-                      {t.dealer} {seatLabel(hand.dealer, locale)}
+                      {t.dealer} {playerNameForSeat(hand.dealer)}
                     </span>
                   </div>
                   <span>
                     {hand.contract.tricks}
-                    {trumpLabel(hand.contract.trump, locale)} {t.by} {seatLabel(hand.contract.bidder, locale)}
+                    {trumpLabel(hand.contract.trump, locale)} {t.by} {playerNameForSeat(hand.contract.bidder)}
                   </span>
                 </header>
                 <div className="history-hand__row">
@@ -58,12 +63,7 @@ export default function HistoryPanel({ locale, open, hands, onToggle }: HistoryP
                 </div>
                 <div className="history-hand__row">
                   <span>{t.score}</span>
-                  <span>
-                    {seatLabel("N", locale)} {hand.scoreDelta.N >= 0 ? `+${hand.scoreDelta.N}` : hand.scoreDelta.N} /{" "}
-                    {seatLabel("E", locale)} {hand.scoreDelta.E >= 0 ? `+${hand.scoreDelta.E}` : hand.scoreDelta.E} /{" "}
-                    {seatLabel("S", locale)} {hand.scoreDelta.S >= 0 ? `+${hand.scoreDelta.S}` : hand.scoreDelta.S} /{" "}
-                    {seatLabel("W", locale)} {hand.scoreDelta.W >= 0 ? `+${hand.scoreDelta.W}` : hand.scoreDelta.W}
-                  </span>
+                  <span>{scoreDelta(hand.scoreDelta)}</span>
                 </div>
                 <div className="history-hand__row">
                   <span>{t.passes}</span>
