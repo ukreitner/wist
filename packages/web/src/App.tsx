@@ -1,6 +1,6 @@
 import { startTransition, useEffect, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
 import { io, type Socket } from "socket.io-client";
-import type { AuctionBid, Card, PrivatePlayerView, PublicMatchState, Seat, Trump } from "@wist/core";
+import type { AuctionBid, Card, PrivatePlayerView, PublicMatchState, Seat, Trick, Trump } from "@wist/core";
 import { bootstrapRoom, createRoom, joinRoom, rejoinRoom, sessionKey } from "./api.js";
 import HistoryPanel from "./components/HistoryPanel.js";
 import PlayingCard from "./components/PlayingCard.js";
@@ -80,6 +80,8 @@ const archiveFileName = (archive: MatchArchive): string =>
 export default function App() {
   const socketRef = useRef<Socket | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const heldTrickKeyRef = useRef<string | null>(null);
+  const heldTrickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { save, load } = usePersistentSession();
   const savedNickname = loadProfileNickname();
   const [session, setSession] = useState<SessionHandle | null>(null);
@@ -93,6 +95,8 @@ export default function App() {
   const [selectedPassCards, setSelectedPassCards] = useState<string[]>([]);
   const [selectedAuctionTrump, setSelectedAuctionTrump] = useState<Trump | null>(null);
   const [selectedAuctionTricks, setSelectedAuctionTricks] = useState<number | null>(null);
+  const [heldCompletedTrick, setHeldCompletedTrick] = useState<Trick | null>(null);
+  const [lastCompletedTrick, setLastCompletedTrick] = useState<Trick | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>(() => loadRecentRooms());
   const [archives, setArchives] = useState<MatchArchive[]>(() => loadArchives());
@@ -249,6 +253,15 @@ export default function App() {
     });
   }, [snapshot?.roomCode, snapshot?.roomStatus, snapshot?.match.completedHands.length, session?.nickname]);
 
+  useEffect(
+    () => () => {
+      if (heldTrickTimerRef.current) {
+        clearTimeout(heldTrickTimerRef.current);
+      }
+    },
+    []
+  );
+
   const roomUrl = (roomCode: string): string => `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
 
   const rejoinUrl = (roomCode: string, token: string): string =>
@@ -371,6 +384,40 @@ export default function App() {
       seatPlayers.set(player.seat, player);
     }
   });
+
+  useEffect(() => {
+    const completedTricks = currentHand?.completedTricks ?? [];
+    const latestTrick = completedTricks.at(-1) ?? null;
+
+    if (!currentHand || !latestTrick) {
+      setLastCompletedTrick(null);
+      setHeldCompletedTrick(null);
+      heldTrickKeyRef.current = null;
+      return;
+    }
+
+    setLastCompletedTrick(latestTrick);
+
+    const latestKey = `${currentHand.id}-${completedTricks.length}-${latestTrick.winner}-${latestTrick.plays
+      .map((play) => `${play.seat}:${play.card.code}`)
+      .join("|")}`;
+
+    if (heldTrickKeyRef.current === latestKey) {
+      return;
+    }
+
+    heldTrickKeyRef.current = latestKey;
+    setHeldCompletedTrick(latestTrick);
+
+    if (heldTrickTimerRef.current) {
+      clearTimeout(heldTrickTimerRef.current);
+    }
+
+    heldTrickTimerRef.current = setTimeout(() => {
+      setHeldCompletedTrick(null);
+      heldTrickTimerRef.current = null;
+    }, 1000);
+  }, [currentHand?.id, currentHand?.completedTricks.length]);
 
   const renderLanguageToggle = () => (
     <button type="button" className="ghost-button locale-toggle" onClick={() => setLocale((value) => (value === "en" ? "he" : "en"))}>
@@ -868,6 +915,7 @@ export default function App() {
                   <button
                     key={trump}
                     type="button"
+                    data-testid={`auction-trump-${trump}`}
                     className={`chip-button${effectiveAuctionTrump === trump ? " is-selected" : ""}`}
                     aria-pressed={effectiveAuctionTrump === trump}
                     onClick={() => setSelectedAuctionTrump(trump)}
@@ -882,6 +930,7 @@ export default function App() {
                   <button
                     key={tricks}
                     type="button"
+                    data-testid={`auction-tricks-${tricks}`}
                     className={`chip-button${effectiveAuctionTricks === tricks ? " is-selected" : ""}`}
                     aria-pressed={effectiveAuctionTricks === tricks}
                     onClick={() => setSelectedAuctionTricks(tricks)}
@@ -892,6 +941,7 @@ export default function App() {
               </div>
               <button
                 type="button"
+                data-testid="auction-submit"
                 className="cta-button wide-button"
                 disabled={!selectedAuctionBid}
                 onClick={() => selectedAuctionBid && emit("auction.action", { kind: "bid", bid: selectedAuctionBid })}
@@ -966,6 +1016,121 @@ export default function App() {
     );
   };
 
+  const renderAuctionBoard = () => {
+    if (!currentHand || currentHand.phase !== "auction") {
+      return null;
+    }
+
+    const latestActionBySeat = new Map<Seat, (typeof currentHand.auctionLog)[number]>();
+
+    currentHand.auctionLog.forEach((entry) => {
+      latestActionBySeat.set(entry.seat, entry);
+    });
+
+    const recentActions = currentHand.auctionLog.slice(-8);
+    const highestText =
+      currentHand.highestBid && currentHand.highestBidder
+        ? `${formatBidChip(currentHand.highestBid, locale)} ${t.by} ${seatLabel(currentHand.highestBidder, locale)}`
+        : locale === "he"
+          ? "אין הצעה עדיין"
+          : "No bid yet";
+    const turnText = currentTurn
+      ? `${locale === "he" ? "עכשיו" : "Now"}: ${seatLabel(currentTurn, locale)}`
+      : t.waiting;
+    const latestLabel = locale === "he" ? "פעולה אחרונה" : "Last action";
+    const highestLabel = locale === "he" ? "ההצעה המובילה" : "Current highest";
+    const actionText = (seat: Seat): string => {
+      const action = latestActionBySeat.get(seat);
+
+      if (!action) {
+        return locale === "he" ? "עוד לא פעל" : "Not yet";
+      }
+
+      return action.kind === "bid" && action.bid ? formatBidChip(action.bid, locale) : t.pass;
+    };
+
+    return (
+      <section className="auction-board" aria-label={t.auction}>
+        <div className="auction-board__hero">
+          <span>{highestLabel}</span>
+          <strong>{highestText}</strong>
+          <em>{turnText}</em>
+        </div>
+
+        <div className="auction-board__seats">
+          {SEATS.map((seat) => {
+            const isHighest = currentHand.highestBidder === seat;
+            const isTurn = currentTurn === seat;
+            const player = seatPlayers.get(seat);
+
+            return (
+              <div
+                key={`auction-${seat}`}
+                className={`auction-seat${isHighest ? " is-highest" : ""}${isTurn ? " is-turn" : ""}`}
+              >
+                <span>{seatLabel(seat, locale)}</span>
+                <strong>{player?.nickname ?? t.openSeat}</strong>
+                <b>{actionText(seat)}</b>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="auction-board__log">
+          <span>{latestLabel}</span>
+          {recentActions.length === 0 ? (
+            <strong>{locale === "he" ? "המכרז עוד לא התחיל" : "Auction has not started"}</strong>
+          ) : (
+            <div>
+              {recentActions.map((entry) => (
+                <strong key={entry.eventId}>
+                  {seatLabel(entry.seat, locale)}{" "}
+                  {entry.kind === "bid" && entry.bid ? formatBidChip(entry.bid, locale) : t.pass}
+                </strong>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  };
+
+  const renderTrickCards = (plays: Trick["plays"]) =>
+    plays.map((play) => (
+      <div key={`${play.seat}-${play.card.code}`} className={`trick-card trick-card--${play.seat.toLowerCase()}`}>
+        <span>{seatLabel(play.seat, locale)}</span>
+        <PlayingCard card={play.card} />
+      </div>
+    ));
+
+  const renderLastTrickTray = () => {
+    if (!lastCompletedTrick) {
+      return null;
+    }
+
+    const lastTrickLabel = locale === "he" ? "הלקיחה האחרונה" : "Last trick";
+    const wonByLabel = locale === "he" ? "זכה" : "won by";
+
+    return (
+      <aside className="last-trick-tray" aria-label={lastTrickLabel}>
+        <div>
+          <span>{lastTrickLabel}</span>
+          <strong>
+            {wonByLabel} {seatLabel(lastCompletedTrick.winner, locale)}
+          </strong>
+        </div>
+        <div className="last-trick-tray__cards">
+          {lastCompletedTrick.plays.map((play) => (
+            <div key={`last-${play.seat}-${play.card.code}`} className="last-trick-card">
+              <span>{seatLabel(play.seat, locale)}</span>
+              <PlayingCard card={play.card} />
+            </div>
+          ))}
+        </div>
+      </aside>
+    );
+  };
+
   const renderHand = () => {
     if (!privateView) {
       return null;
@@ -1030,8 +1195,12 @@ export default function App() {
     );
   };
 
-  const renderGame = () => (
-    <main className={`shell app-root table-shell ${isRtl ? "is-rtl" : ""}`} dir={isRtl ? "rtl" : "ltr"}>
+  const renderGame = () => {
+    const activeTrickPlays = currentHand?.currentTrick?.plays ?? [];
+    const visibleTrickPlays = activeTrickPlays.length > 0 ? activeTrickPlays : heldCompletedTrick?.plays ?? [];
+
+    return (
+      <main className={`shell app-root table-shell ${isRtl ? "is-rtl" : ""}`} dir={isRtl ? "rtl" : "ltr"}>
       <header className="room-header room-header--table">
         <div>
           <span className="hero-card__eyebrow">
@@ -1084,15 +1253,22 @@ export default function App() {
                 ) : null}
               </div>
 
-              <div className="trick-cluster">
-                {currentHand?.currentTrick?.plays.map((play) => (
-                  <div key={`${play.seat}-${play.card.code}`} className={`trick-card trick-card--${play.seat.toLowerCase()}`}>
-                    <span>{seatLabel(play.seat, locale)}</span>
-                    <PlayingCard card={play.card} />
+              {currentHand?.phase === "auction" ? (
+                renderAuctionBoard()
+              ) : (
+                <>
+                  <div className={`trick-cluster ${heldCompletedTrick && activeTrickPlays.length === 0 ? "is-holding-trick" : ""}`}>
+                    {renderTrickCards(visibleTrickPlays)}
+                    {heldCompletedTrick && activeTrickPlays.length === 0 ? (
+                      <span className="trick-cluster__winner">
+                        {locale === "he" ? "לקיחה ל" : "Trick to"} {seatLabel(heldCompletedTrick.winner, locale)}
+                      </span>
+                    ) : null}
+                    {visibleTrickPlays.length === 0 ? <p>{t.currentTrickEmpty}</p> : null}
                   </div>
-                ))}
-                {!currentHand?.currentTrick?.plays.length ? <p>{t.currentTrickEmpty}</p> : null}
-              </div>
+                  {renderLastTrickTray()}
+                </>
+              )}
             </div>
           </section>
 
@@ -1107,7 +1283,8 @@ export default function App() {
       </section>
       {error ? <p className="error-banner">{error}</p> : null}
     </main>
-  );
+    );
+  };
 
   return (
     <>

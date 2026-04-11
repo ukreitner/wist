@@ -76,7 +76,13 @@ const suitOrder = (code: string): number =>
   })[code.at(-1) as "C" | "D" | "H" | "S"];
 
 const sortCardCodes = (codes: string[]): string[] =>
-  codes.slice().sort((left, right) => rankValue(left) - rankValue(right) || suitOrder(left) - suitOrder(right));
+  codes.slice().sort((left, right) => suitOrder(left) - suitOrder(right) || rankValue(left) - rankValue(right));
+
+const submitAuctionBid = async (page: Page, tricks: number, trump: "C" | "D" | "H" | "S" | "NT") => {
+  await page.getByTestId(`auction-trump-${trump}`).click();
+  await page.getByTestId(`auction-tricks-${tricks}`).click();
+  await page.getByTestId("auction-submit").click();
+};
 
 const assignSeatsAndStart = async (hostPage: Page) => {
   await expect(hostPage.getByTestId("start-match")).toBeVisible();
@@ -89,7 +95,7 @@ const assignSeatsAndStart = async (hostPage: Page) => {
 };
 
 const passAuctionAndBet = async (pages: { host: Page; east: Page; south: Page; west: Page }) => {
-  await pages.east.getByRole("button", { name: "Auction bid 5NT", exact: true }).click();
+  await submitAuctionBid(pages.east, 5, "NT");
   await pages.south.getByRole("button", { name: "Pass", exact: true }).click();
   await pages.west.getByRole("button", { name: "Pass", exact: true }).click();
   await pages.host.getByRole("button", { name: "Pass", exact: true }).click();
@@ -145,7 +151,7 @@ test("undo and reconnect work during an active hand", async ({ browser, request 
 
   await assignSeatsAndStart(hostPage);
 
-  await eastPage.getByRole("button", { name: "Auction bid 5H", exact: true }).click();
+  await submitAuctionBid(eastPage, 5, "H");
   await eastPage.getByRole("button", { name: "Undo Latest Action", exact: true }).click();
   await expect(hostPage.getByText("Auction opening")).toBeVisible();
 
