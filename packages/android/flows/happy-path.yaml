@@ -1,0 +1,84 @@
+appId: host.exp.exponent
+name: Wist happy path (Home → Lobby → Pass → Auction → Betting → Play → Score)
+---
+- openLink: "exp://localhost:8081"
+- extendedWaitUntil:
+    visible:
+      text: "Wist"
+    timeout: 45000
+
+# Home → Lobby
+- tapOn:
+    id: "cta-create"
+- extendedWaitUntil:
+    visible:
+      text: "Start Match"
+    timeout: 10000
+- assertVisible: "KZPQ"
+
+# Lobby → PassCards
+- tapOn:
+    id: "cta-start-match"
+- extendedWaitUntil:
+    visible:
+      text: "Pass 3 Cards Left"
+    timeout: 10000
+
+# PassCards → Auction
+- tapOn:
+    id: "card-14-S"
+- tapOn:
+    id: "card-11-H"
+- tapOn:
+    id: "card-8-C"
+- extendedWaitUntil:
+    visible:
+      text: "Passing"
+    timeout: 5000
+- tapOn:
+    id: "cta-pass-cards"
+
+# Auction → Betting
+- extendedWaitUntil:
+    visible:
+      text: "Your Bid"
+    timeout: 10000
+- assertVisible: "CURRENT HIGHEST"
+- tapOn:
+    id: "cta-bid"
+
+# Betting → Play
+- extendedWaitUntil:
+    visible:
+      text: "How many tricks?"
+    timeout: 10000
+- tapOn:
+    id: "bet-5"
+- tapOn:
+    id: "cta-bet"
+
+# Play → Score
+- extendedWaitUntil:
+    visible:
+      text: "Your turn"
+    timeout: 10000
+- tapOn:
+    id: "card-11-H"
+- tapOn:
+    id: "cta-play"
+
+# Score assertions
+- extendedWaitUntil:
+    visible:
+      text: "Scorecard"
+    timeout: 10000
+- assertVisible: "Score Table"
+- assertVisible: "Deal Next Hand"
+
+# Cycle: Deal Next Hand → Auction
+- tapOn:
+    id: "cta-deal-next"
+- extendedWaitUntil:
+    visible:
+      text: "Your Bid"
+    timeout: 10000
