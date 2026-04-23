@@ -61,6 +61,22 @@ Relevant environment variables:
 - `ALLOW_TEST_PRESETS=1`: enables deterministic preset hands for automated QA
 - `EXPO_PUBLIC_SERVER_URL`: Android client server URL for Expo/dev builds
 
+## Render + Supabase
+
+The repo includes a root `render.yaml` Blueprint for the free Render web service.
+
+During Blueprint creation, Render prompts for:
+
+- `DATABASE_URL`: use the Supabase session pooler connection string
+
+The service is configured to:
+
+- run in Render's Frankfurt region
+- build with `npm ci && npm run build`
+- start with `node packages/server/dist/index.js`
+- serve the built web app from `packages/web/dist`
+- derive public invite links from Render's `RENDER_EXTERNAL_HOSTNAME`
+
 ## Docker
 
 Use the root [Dockerfile](C:/Users/urikr/OneDrive/Documents/wist/Dockerfile) for a single-container deployment:

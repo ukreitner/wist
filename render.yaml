@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: wist
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: android-app
+    buildCommand: npm ci && npm run build
+    startCommand: node packages/server/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: HOST
+        value: 0.0.0.0
+      - key: WIST_STATIC_DIR
+        value: packages/web/dist
+      - key: DATABASE_URL
+        sync: false

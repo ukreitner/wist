@@ -99,7 +99,10 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
   app.use(express.json());
 
   const configuredStaticDir = config.staticDir ?? process.env.WIST_STATIC_DIR;
-  const publicAppUrl = config.publicAppUrl ?? process.env.PUBLIC_APP_URL ?? null;
+  const renderPublicAppUrl = process.env.RENDER_EXTERNAL_HOSTNAME
+    ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`
+    : null;
+  const publicAppUrl = config.publicAppUrl ?? process.env.PUBLIC_APP_URL ?? renderPublicAppUrl;
   const staticDir = configuredStaticDir
     ? path.resolve(configuredStaticDir)
     : path.resolve(process.cwd(), "packages/web/dist");
