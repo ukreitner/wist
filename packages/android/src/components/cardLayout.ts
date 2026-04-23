@@ -21,5 +21,5 @@ export const sortCardsForDisplay = <T extends VisibleCard>(cards: T[]): T[] =>
       return suitDelta;
     }
 
-    return right.rank - left.rank;
+    return left.rank - right.rank;
   });

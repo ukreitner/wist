@@ -92,11 +92,11 @@ function WistCardImpl({ rank, suit, width = 68, selected = false, playable = tru
         </SvgText>
         {rank === 14 ? (
           <>
-            <SvgText x={90} y={164} textAnchor="middle" fontSize={104} fill={fill}>
-              {sym}
+            <SvgText x={90} y={139} textAnchor="middle" fontSize={78} fontWeight="900" fill={fill} fontFamily={T.serif}>
+              {rl}
             </SvgText>
-            <SvgText x={90} y={204} textAnchor="middle" fontSize={25} fontWeight="800" fill={fill} opacity={0.82} fontFamily={T.serif}>
-              ACE
+            <SvgText x={90} y={193} textAnchor="middle" fontSize={62} fill={fill}>
+              {sym}
             </SvgText>
           </>
         ) : rank >= 11 ? (
