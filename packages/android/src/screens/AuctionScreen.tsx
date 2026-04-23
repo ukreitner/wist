@@ -16,7 +16,7 @@ const SUIT_SYM: Record<Trump, string> = { C: '♣', D: '♦', H: '♥', S: '♠'
 export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
   const [selectedTrump, setSelectedTrump] = useState<Trump | null>(null);
   const [selectedTricks, setSelectedTricks] = useState<number | null>(null);
-  const { playerForSeat, selfName, highestBidText, hand, legalPlayCardCodes, auctionBids, currentTurn, recentActions, submitAuctionBid, submitAuctionPass, error, clearError } = useDemoState();
+  const { playerForSeat, selfName, highestBidText, hand, auctionBids, currentTurn, recentActions, submitAuctionBid, submitAuctionPass, error, clearError } = useDemoState();
 
   const trumps = useMemo(
     () => Array.from(new Set(auctionBids.map((bid) => bid.trump))),
@@ -91,7 +91,7 @@ export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
 
         <View style={s.handWrap}>
           <Text style={s.handLabel}>Your Hand · {selfName}</Text>
-          <HandFan cards={hand} playable={new Set(legalPlayCardCodes)} />
+          <HandFan cards={hand} />
         </View>
 
         <View style={s.panel}>
