@@ -1,4 +1,4 @@
-import type { SessionHandle } from "./types.js";
+import type { SessionHandle } from "./types";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 

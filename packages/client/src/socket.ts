@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import type { RoomSnapshot, SessionHandle, SnapshotPlayer } from "./types.js";
+import type { RoomSnapshot, SessionHandle, SnapshotPlayer } from "./types";
 
 export type ConnectState = "disconnected" | "connecting" | "connected";
 

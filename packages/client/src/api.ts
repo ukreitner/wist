@@ -1,4 +1,4 @@
-import type { ClientConfig, RoomSnapshot, SessionHandle } from "./types.js";
+import type { ClientConfig, RoomSnapshot, SessionHandle } from "./types";
 
 const normalizeServerUrl = (serverUrl?: string): string => serverUrl?.replace(/\/+$/, "") ?? "";
 
