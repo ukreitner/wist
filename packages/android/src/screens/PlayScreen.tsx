@@ -31,10 +31,8 @@ function TrickCardSlot({ seat, name, rank, suit }: { seat: Seat; name: string; r
 export default function PlayScreen({ navigation }: NavProps<'Play'>) {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const { playerForSeat, selfName, contractText, hand, legalPlayCardCodes, currentTrick, completedTricks, currentBets, currentTaken, currentTurn, playCard, error, clearError } = useDemoState();
-  const playable = useMemo(() => new Set(legalPlayCardCodes.map((code) => {
-    const card = hand.find((entry) => entry.code === code);
-    return card ? `${card.rank}-${card.suit}` : code;
-  })), [hand, legalPlayCardCodes]);
+  const playable = useMemo(() => new Set(legalPlayCardCodes), [legalPlayCardCodes]);
+  const selectedCardInfo = selectedCard ? hand.find((entry) => entry.code === selectedCard) ?? null : null;
   const latestTrick = completedTricks.at(-1) ?? null;
 
   const TrickCenter = (
@@ -89,7 +87,7 @@ export default function PlayScreen({ navigation }: NavProps<'Play'>) {
             cards={hand}
             playable={playable}
             selectedCard={selectedCard}
-            onCardPress={(key) => setSelectedCard(selectedCard === key ? null : hand.find((entry) => `${entry.rank}-${entry.suit}` === key)?.code ?? null)}
+            onCardPress={(key, card) => setSelectedCard(selectedCard === key ? null : card.code ?? key)}
           />
         </View>
 
@@ -97,7 +95,9 @@ export default function PlayScreen({ navigation }: NavProps<'Play'>) {
           <View style={s.selectedPanel}>
             <View>
               <Text style={s.selectedEyebrow}>Selected</Text>
-              <Text style={s.selectedCard}>{selectedCard}</Text>
+              <Text style={s.selectedCard}>
+                {selectedCardInfo ? `${rankLabel(selectedCardInfo.rank)}${SUIT_SYM[selectedCardInfo.suit]}` : selectedCard}
+              </Text>
             </View>
             <TouchableOpacity
               testID="cta-play"

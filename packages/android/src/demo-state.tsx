@@ -9,7 +9,7 @@ import {
   type ReactNode
 } from "react";
 import type { Socket } from "socket.io-client";
-import type { AuctionBid, Card, PrivatePlayerView, PublicMatchState, Seat, Trump } from "@wist/core";
+import { sortCards, type AuctionBid, type Card, type PrivatePlayerView, type PublicMatchState, type Seat, type Trump } from "@wist/core";
 import {
   bootstrapRoom,
   buildRejoinUrl,
@@ -341,7 +341,7 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
       error,
       players,
       recentRooms,
-      hand: privateView?.hand ?? [],
+      hand: privateView ? sortCards(privateView.hand) : [],
       legalPassCardCodes: privateView?.legalActions.passSelection?.selectableCardCodes ?? [],
       legalPlayCardCodes: privateView?.legalActions.playing?.cardCodes ?? [],
       auctionBids: privateView?.legalActions.auction?.bids ?? [],

@@ -3,12 +3,14 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet, TouchableWithoutF
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import { WistCard } from '../components/WistCard';
+import { sortCardsForDisplay } from '../components/cardLayout';
 import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
 
 export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
   const [selected, setSelected] = useState<string[]>([]);
   const { leftOfSelf, hand, legalPassCardCodes, submitPass, error, clearError } = useDemoState();
+  const sortedHand = sortCardsForDisplay(hand);
 
   const toggle = (key: string) => {
     setSelected((prev) => {
@@ -50,7 +52,7 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
         <View style={{ gap: 10 }}>
           <Text style={s.sectionLabel}>Your Hand (tap to select)</Text>
           <View style={s.handGrid}>
-            {hand.map((card) => {
+            {sortedHand.map((card) => {
               const testKey = `${card.rank}-${card.suit}`;
               const isSel = selected.includes(card.code);
               const isPlayable = legalPassCardCodes.includes(card.code);
@@ -60,13 +62,13 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
                     testID={`card-${testKey}`}
                     accessible
                     accessibilityLabel={`card-${testKey}`}
-                    style={{ transform: [{ translateY: isSel ? -10 : 0 }] }}
+                    style={[s.cardSlot, isSel && s.cardSlotSelected]}
                   >
                     <WistCard
                       rank={card.rank}
                       suit={card.suit}
                       width={54}
-                      selected={false}
+                      selected={isSel}
                       playable={isPlayable && (!selected.length || isSel || selected.length < 3)}
                     />
                   </View>
@@ -167,9 +169,14 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    columnGap: 6,
+    rowGap: 9,
     justifyContent: 'center',
+    paddingTop: 12,
+    overflow: 'visible',
   },
+  cardSlot: { overflow: 'visible' },
+  cardSlotSelected: { zIndex: 20, elevation: 20 },
   preview: {
     marginHorizontal: 14,
     paddingVertical: 10,
