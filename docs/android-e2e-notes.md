@@ -50,12 +50,27 @@
   - `npm run build`
   - `npm run test -w @wist/server`
   - `npm run test:e2e`
+- Public Render deployment verified:
+  - service URL: `https://wist-z1k0.onrender.com`
+  - `/health` returns `{ "ok": true }`
+  - `/api/config` returns `publicAppUrl: "https://wist-z1k0.onrender.com"`
+  - Render service is Blueprint-managed from branch `android-app`
+  - Render environment contains `DATABASE_URL`, `HOST`, `NODE_VERSION`, and `WIST_STATIC_DIR`
+- Public web smoke verified:
+  - created hosted room `Q75BP2`
+  - joined the same room from a second web tab as another player
+  - invite/rejoin URLs use the public Render host
+- Public Android smoke verified:
+  - launched Expo Go against `EXPO_PUBLIC_SERVER_URL=https://wist-z1k0.onrender.com`
+  - Android resumed hosted room `TSLA` and showed `Connected`
+  - tapping `Start Match` advanced the hosted game to the pass-cards phase with a real dealt hand
 - Remaining caveat in this Codex sandbox:
   - local fixed-port server binds such as `127.0.0.1:4100` are blocked with `EPERM`, so the final Android smoke test against a live local backend could not be completed inside this sandbox even though server runtime tests and browser e2e passed.
 
 ## Next Steps
 
-- Verify Android manually against either:
-  - a public Render/Supabase deployment, or
-  - a local backend started outside the sandbox
+- For manual Android testing against the public backend:
+  - start the emulator with the workspace-local `wist-pixel-8` AVD
+  - run Expo from `packages/android` with `EXPO_PUBLIC_SERVER_URL=https://wist-z1k0.onrender.com`
+  - open `exp://127.0.0.1:8081` in Expo Go after `adb reverse tcp:8081 tcp:8081`
 - If we want fully automated mobile e2e next, wire the Android flow to a stable runner or Expo dev build target instead of Expo Go.
