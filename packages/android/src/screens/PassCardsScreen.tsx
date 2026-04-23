@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import { WistCard, type Card } from '../components/WistCard';
 import type { NavProps } from '../nav';
+import { useDemoState } from '../demo-state';
 
 const HAND: Card[] = [
   { rank: 14, suit: 'S' }, { rank: 11, suit: 'H' }, { rank: 8, suit: 'C' },
@@ -15,6 +16,7 @@ const HAND: Card[] = [
 
 export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
   const [selected, setSelected] = useState<string[]>([]);
+  const { leftOfSelf } = useDemoState();
 
   const toggle = (key: string) => {
     setSelected((prev) => {
@@ -37,7 +39,7 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
           <Text style={s.eyebrow}>Hand 1 · Special Rule</Text>
           <Text style={s.title}>Pass 3 Cards Left</Text>
           <Text style={s.lede}>
-            Select 3 cards to pass to <Text style={s.ledeStrong}>Yossi (South)</Text>. All players pass simultaneously.
+            Select 3 cards to pass to <Text style={s.ledeStrong}>{leftOfSelf.name} (South)</Text>. All players pass simultaneously.
           </Text>
         </View>
 
@@ -104,7 +106,7 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
           onPress={() => n === 3 && navigation.navigate('Auction')}
         >
           <Text style={s.ctaText}>
-            {n === 3 ? 'Pass Cards to Yossi →' : `Select ${3 - n} more card${3 - n !== 1 ? 's' : ''}`}
+            {n === 3 ? `Pass Cards to ${leftOfSelf.name} →` : `Select ${3 - n} more card${3 - n !== 1 ? 's' : ''}`}
           </Text>
         </TouchableOpacity>
       </ScrollView>

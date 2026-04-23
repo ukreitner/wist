@@ -3,11 +3,15 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import type { NavProps } from '../nav';
+import { useDemoState } from '../demo-state';
 
 export default function HomeScreen({ navigation }: NavProps<'Home'>) {
   const [createName, setCreateName] = useState('Dani');
   const [joinCode, setJoinCode] = useState('');
   const [joinName, setJoinName] = useState('Dani');
+  const { createRoom, joinRoom, resumeRoom, recentRooms } = useDemoState();
+  const canCreate = createName.trim().length > 0;
+  const canJoin = joinCode.trim().length > 0 && joinName.trim().length > 0;
 
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
@@ -25,26 +29,47 @@ export default function HomeScreen({ navigation }: NavProps<'Home'>) {
 
         <Panel label="New Game" heading="Create Room">
           <TextInput style={s.input} value={createName} onChangeText={setCreateName} placeholder="Your nickname" placeholderTextColor="#8a8a8a" />
-          <Cta label="Create Room" onPress={() => navigation.navigate('Lobby')} testID="cta-create" />
+          <Cta
+            label="Create Room"
+            onPress={() => {
+              if (!canCreate) return;
+              createRoom(createName);
+              navigation.navigate('Lobby');
+            }}
+            disabled={!canCreate}
+            testID="cta-create"
+          />
         </Panel>
 
         <Panel label="Join Game" heading="Join Room">
           <TextInput style={s.input} value={joinCode} onChangeText={(v) => setJoinCode(v.toUpperCase())} placeholder="Room code (e.g. KZPQ)" placeholderTextColor="#8a8a8a" />
           <TextInput style={s.input} value={joinName} onChangeText={setJoinName} placeholder="Your nickname" placeholderTextColor="#8a8a8a" />
-          <Cta label="Join Room" onPress={() => navigation.navigate('Lobby')} testID="cta-join" />
+          <Cta
+            label="Join Room"
+            onPress={() => {
+              if (!canJoin) return;
+              joinRoom(joinCode, joinName);
+              navigation.navigate('Lobby');
+            }}
+            disabled={!canJoin}
+            testID="cta-join"
+          />
         </Panel>
 
         <Panel label="On this device" heading="Recent Rooms">
-          {[
-            { code: 'KZPQ', nick: 'Dani', time: 'Today, 14:32' },
-            { code: 'MRWV', nick: 'Dani', time: 'Yesterday, 21:10' },
-          ].map((r) => (
+          {recentRooms.map((r) => (
             <View key={r.code} style={s.recent}>
               <View>
                 <Text style={s.recentCode}>{r.code}</Text>
                 <Text style={s.recentMeta}>{r.nick} · {r.time}</Text>
               </View>
-              <TouchableOpacity style={s.ghostBtn} onPress={() => navigation.navigate('Lobby')}>
+              <TouchableOpacity
+                style={s.ghostBtn}
+                onPress={() => {
+                  resumeRoom(r.code, r.nick);
+                  navigation.navigate('Lobby');
+                }}
+              >
                 <Text style={s.ghostBtnText}>Resume</Text>
               </TouchableOpacity>
             </View>
@@ -65,10 +90,10 @@ function Panel({ label, heading, children }: { label: string; heading: string; c
   );
 }
 
-function Cta({ label, onPress, testID }: { label: string; onPress: () => void; testID?: string }) {
+function Cta({ label, onPress, disabled = false, testID }: { label: string; onPress: () => void; disabled?: boolean; testID?: string }) {
   return (
-    <TouchableOpacity onPress={onPress} testID={testID} style={s.cta}>
-      <Text style={s.ctaText}>{label}</Text>
+    <TouchableOpacity onPress={onPress} disabled={disabled} testID={testID} style={[s.cta, disabled && s.ctaDisabled]}>
+      <Text style={[s.ctaText, disabled && s.ctaTextDisabled]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -89,7 +114,9 @@ const s = StyleSheet.create({
   panelHeading: { fontFamily: T.serif, fontSize: 19, color: T.ink },
   input: { width: '100%', paddingHorizontal: 14, paddingVertical: 12, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(109,86,46,0.18)', backgroundColor: 'rgba(255,253,247,0.93)', color: T.ink, fontSize: 14 },
   cta: { width: '100%', paddingVertical: 13, borderRadius: 99, backgroundColor: T.gold, alignItems: 'center' },
+  ctaDisabled: { backgroundColor: 'rgba(18,42,32,0.12)' },
   ctaText: { color: '#1c2024', fontWeight: '700', fontSize: 14 },
+  ctaTextDisabled: { color: T.muted },
   recent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 13, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.54)', borderWidth: 1, borderColor: 'rgba(134,106,64,0.12)' },
   recentCode: { fontFamily: T.serif, fontSize: 15, fontWeight: '700', color: T.ink },
   recentMeta: { fontSize: 11, color: T.muted, marginTop: 1 },

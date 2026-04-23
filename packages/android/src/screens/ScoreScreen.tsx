@@ -2,10 +2,10 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import type { NavProps } from '../nav';
+import { useDemoState } from '../demo-state';
 
 type HandRow = { id: number; bets: number[]; taken: number[]; delta: number[] };
 
-const players = ['Avi', 'Gila', 'Dani', 'Yossi'];
 const hands: HandRow[] = [
   { id: 1, bets: [7, 2, 2, 3], taken: [4, 1, 3, 5], delta: [-3, -1, 1, -4] },
   { id: 2, bets: [3, 2, 2, 3], taken: [2, 1, 5, 5], delta: [1, 1, -4, -4] },
@@ -16,6 +16,8 @@ const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 export default function ScoreScreen({ navigation }: NavProps<'Score'>) {
   const lastHand = hands[hands.length - 1];
+  const { playerForSeat } = useDemoState();
+  const players = [playerForSeat('N').name, playerForSeat('E').name, playerForSeat('W').name, playerForSeat('S').name];
 
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
@@ -28,7 +30,7 @@ export default function ScoreScreen({ navigation }: NavProps<'Score'>) {
 
         {/* Hand deltas */}
         <View style={s.deltasCard}>
-          <Text style={s.deltasLabel}>Hand {lastHand.id} · 6♥ by Avi</Text>
+          <Text style={s.deltasLabel}>Hand {lastHand.id} · 6♥ by {playerForSeat('N').name}</Text>
           <View style={s.deltasGrid}>
             {players.map((p, i) => {
               const d = lastHand.delta[i];

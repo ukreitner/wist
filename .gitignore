@@ -7,3 +7,9 @@ playwright-report
 test-results
 .vite
 .data
+.android-avd
+.android-sdk
+.android-user
+emulator-current.png
+latest-logcat.txt
+latest-ui.xml

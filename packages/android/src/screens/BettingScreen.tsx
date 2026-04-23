@@ -8,6 +8,7 @@ import { SeatChip } from '../components/SeatChip';
 import { ChipBtn } from '../components/ChipBtn';
 import { WistCard, type Card } from '../components/WistCard';
 import type { NavProps } from '../nav';
+import { useDemoState } from '../demo-state';
 
 const HAND: Card[] = [
   { rank: 14, suit: 'S' }, { rank: 11, suit: 'H' }, { rank: 8, suit: 'C' },
@@ -19,7 +20,12 @@ const HAND: Card[] = [
 
 export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
   const [selBet, setSelBet] = useState<number | null>(null);
-  const betsIn = [{ name: 'Avi', bet: 7 }, { name: 'Gila', bet: 2 }, { name: 'Yossi', bet: 3 }];
+  const { playerForSeat, selfName, contractText } = useDemoState();
+  const betsIn = [
+    { name: playerForSeat('N').name, bet: 7 },
+    { name: playerForSeat('E').name, bet: 2 },
+    { name: playerForSeat('S').name, bet: 3 }
+  ];
   const total = betsIn.reduce((acc, b) => acc + b.bet, 0);
   const forbidden = 13 - total;
   const betOptions = Array.from({ length: 14 }, (_, i) => i);
@@ -29,11 +35,11 @@ export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
       <View style={s.centerTop}>
         <Text style={s.centerEyebrow}>Contract</Text>
         <Text style={s.centerBid}>
-          6<Text style={{ color: '#e84040' }}>♥</Text> by Avi
+          6<Text style={{ color: '#e84040' }}>♥</Text> by {playerForSeat('N').name}
         </Text>
       </View>
       <View style={s.centerGrid}>
-        {[...betsIn, { name: 'Dani', bet: '?', isMe: true }].map((p) => (
+        {[...betsIn, { name: selfName, bet: '?', isMe: true }].map((p) => (
           <View key={p.name} style={[s.centerCell, (p as any).isMe && s.centerCellMe]}>
             <Text style={s.centerCellSeat}>{(p as any).isMe ? '▶ YOU' : 'BET'}</Text>
             <Text style={s.centerCellName} numberOfLines={1}>{p.name}</Text>
@@ -54,12 +60,12 @@ export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
       <ScrollView contentContainerStyle={{ paddingTop: 40, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <GameHeader hand="Hand 1" phase="Betting" contract="6♥ by Avi" />
+        <GameHeader hand="Hand 1" phase="Betting" contract={contractText} />
         <FeltTable
-          north={<SeatChip name="Avi" />}
-          west={<SeatChip name="Dani" isTurn />}
-          east={<SeatChip name="Gila" />}
-          south={<SeatChip name="Yossi" />}
+          north={<SeatChip name={playerForSeat('N').name} />}
+          west={<SeatChip name={playerForSeat('W').name} isTurn />}
+          east={<SeatChip name={playerForSeat('E').name} />}
+          south={<SeatChip name={playerForSeat('S').name} />}
           center={BettingCenter}
           centerH={220}
         />

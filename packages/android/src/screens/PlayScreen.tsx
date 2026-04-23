@@ -8,6 +8,7 @@ import { SeatChip } from '../components/SeatChip';
 import { HandFan } from '../components/HandFan';
 import { WistCard, type Card, type Suit } from '../components/WistCard';
 import type { NavProps } from '../nav';
+import { useDemoState } from '../demo-state';
 
 const MY_HAND: Card[] = [
   { rank: 14, suit: 'S' }, { rank: 11, suit: 'H' }, { rank: 8, suit: 'C' },
@@ -19,11 +20,6 @@ const MY_HAND: Card[] = [
 const PLAYABLE = new Set(['11-H', '10-H']);
 
 type TrickCardT = { seat: 'N' | 'E' | 'S' | 'W'; name: string; rank: number; suit: Suit };
-const TRICK: TrickCardT[] = [
-  { seat: 'N', name: 'Avi', rank: 7, suit: 'H' },
-  { seat: 'E', name: 'Gila', rank: 3, suit: 'H' },
-  { seat: 'W', name: 'Yossi', rank: 13, suit: 'D' },
-];
 
 function TrickCardSlot({ seat, name, rank, suit }: TrickCardT) {
   const pos =
@@ -44,10 +40,16 @@ function TrickCardSlot({ seat, name, rank, suit }: TrickCardT) {
 
 export default function PlayScreen({ navigation }: NavProps<'Play'>) {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const { playerForSeat, selfName, contractText } = useDemoState();
+  const trick: TrickCardT[] = [
+    { seat: 'N', name: playerForSeat('N').name, rank: 7, suit: 'H' },
+    { seat: 'E', name: playerForSeat('E').name, rank: 3, suit: 'H' },
+    { seat: 'S', name: playerForSeat('S').name, rank: 13, suit: 'D' }
+  ];
 
   const TrickCenter = (
     <View style={s.trickCenter}>
-      {TRICK.map((t) => (
+      {trick.map((t) => (
         <TrickCardSlot key={t.seat} {...t} />
       ))}
       <View style={s.yourTurnPill}>
@@ -61,12 +63,12 @@ export default function PlayScreen({ navigation }: NavProps<'Play'>) {
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
       <ScrollView contentContainerStyle={{ paddingTop: 40, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <GameHeader hand="Hand 1 · Trick 4" phase="Playing" contract="6♥ by Avi" trumpSym="♥" trumpColor="#e84040" />
+        <GameHeader hand="Hand 1 · Trick 4" phase="Playing" contract={contractText} trumpSym="♥" trumpColor="#e84040" />
         <FeltTable
-          north={<SeatChip name="Avi" bid={6} taken={2} />}
-          west={<SeatChip name="Yossi" bid={3} taken={3} />}
-          east={<SeatChip name="Gila" bid={2} taken={1} />}
-          south={<SeatChip name="Dani" bid={2} taken={1} isTurn />}
+          north={<SeatChip name={playerForSeat('N').name} bid={6} taken={2} />}
+          west={<SeatChip name={playerForSeat('W').name} bid={2} taken={1} isTurn />}
+          east={<SeatChip name={playerForSeat('E').name} bid={2} taken={1} />}
+          south={<SeatChip name={playerForSeat('S').name} bid={3} taken={3} />}
           center={TrickCenter}
           centerH={230}
         />
@@ -75,7 +77,7 @@ export default function PlayScreen({ navigation }: NavProps<'Play'>) {
         <View style={s.lastTrick}>
           <View>
             <Text style={s.lastEyebrow}>Last trick</Text>
-            <Text style={s.lastWinner}>Won by Avi</Text>
+            <Text style={s.lastWinner}>Won by {playerForSeat('N').name}</Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 4, marginLeft: 'auto' }}>
             {[{ r: 14, s: 'H' as Suit }, { r: 9, s: 'H' as Suit }, { r: 8, s: 'D' as Suit }, { r: 2, s: 'C' as Suit }].map((c, i) => (
@@ -86,7 +88,7 @@ export default function PlayScreen({ navigation }: NavProps<'Play'>) {
 
         {/* My hand */}
         <View style={{ paddingHorizontal: 12, paddingTop: 10, gap: 8 }}>
-          <Text style={s.handLabel}>Your Hand · Dani — tap a card to play</Text>
+          <Text style={s.handLabel}>Your Hand · {selfName} — tap a card to play</Text>
           <HandFan
             cards={MY_HAND}
             playable={PLAYABLE}

@@ -2,42 +2,33 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-nati
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import type { NavProps } from '../nav';
+import { useDemoState, type Seat } from '../demo-state';
 
-type Player = { name: string; seat: 'N' | 'E' | 'S' | 'W'; isHost?: boolean; connected: boolean };
-
-const players: Player[] = [
-  { name: 'Avi', seat: 'N', isHost: true, connected: true },
-  { name: 'Gila', seat: 'E', connected: true },
-  { name: 'Yossi', seat: 'S', connected: false },
-  { name: 'Dani', seat: 'W', connected: true },
-];
-
-function seatName(seat: 'N' | 'E' | 'S' | 'W') {
-  return players.find((p) => p.seat === seat)?.name ?? '—';
-}
-
-function SeatBox({ seat }: { seat: 'N' | 'E' | 'S' | 'W' }) {
+function SeatBox({ seat, name }: { seat: Seat; name: string }) {
   return (
     <View style={s.seatBox}>
       <Text style={s.seatLabel}>{seat}</Text>
-      <Text style={s.seatName}>{seatName(seat)}</Text>
+      <Text style={s.seatName}>{name}</Text>
     </View>
   );
 }
 
 export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
+  const { roomCode, players, playerForSeat } = useDemoState();
+  const connectedCount = players.filter((player) => player.connected).length;
+
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={s.header}>
           <Text style={s.eyebrow}>Room</Text>
-          <Text style={s.code}>KZPQ</Text>
+          <Text style={s.code}>{roomCode}</Text>
           <View style={s.statusRow}>
             <View style={s.statusPill}>
               <Text style={s.statusText}>● Connected</Text>
             </View>
-            <Text style={s.waiting}>Waiting for players…</Text>
+            <Text style={s.waiting}>{connectedCount} / 4 online</Text>
           </View>
         </View>
 
@@ -45,20 +36,20 @@ export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
         <LinearGradient colors={['#20553e', '#163b2c', '#112b21']} style={s.felt}>
           <View style={s.feltRow}>
             <View style={s.placeholder} />
-            <SeatBox seat="N" />
+            <SeatBox seat="N" name={playerForSeat('N').name} />
             <View style={s.placeholder} />
           </View>
           <View style={s.feltMiddle}>
-            <SeatBox seat="W" />
+            <SeatBox seat="W" name={playerForSeat('W').name} />
             <View style={s.center}>
-              <Text style={s.centerCode}>KZPQ</Text>
+              <Text style={s.centerCode}>{roomCode}</Text>
               <Text style={s.centerMeta}>4 / 4 seated</Text>
             </View>
-            <SeatBox seat="E" />
+            <SeatBox seat="E" name={playerForSeat('E').name} />
           </View>
           <View style={s.feltRow}>
             <View style={s.placeholder} />
-            <SeatBox seat="S" />
+            <SeatBox seat="S" name={playerForSeat('S').name} />
             <View style={s.placeholder} />
           </View>
         </LinearGradient>

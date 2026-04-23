@@ -8,26 +8,32 @@ import { SeatChip } from '../components/SeatChip';
 import { ChipBtn } from '../components/ChipBtn';
 import { WistCard } from '../components/WistCard';
 import type { NavProps } from '../nav';
+import { useDemoState } from '../demo-state';
 
 type Suit = 'C' | 'D' | 'H' | 'S' | 'NT';
+type AuctionSeat = {
+  name: string;
+  seat: 'N' | 'E' | 'S' | 'W';
+  action: string;
+  isHighest?: boolean;
+  isTurn?: boolean;
+};
 
 const SUIT_SYM_NT: Record<Suit, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
-
-type Seat = { name: string; seat: 'N' | 'E' | 'S' | 'W'; action: string; isHighest?: boolean; isTurn?: boolean };
-
-const seats: Seat[] = [
-  { name: 'Avi', seat: 'N', action: '5♥', isHighest: true },
-  { name: 'Gila', seat: 'E', action: 'Pass' },
-  { name: 'Yossi', seat: 'S', action: '5♠' },
-  { name: 'Dani', seat: 'W', action: '—', isTurn: true },
-];
 
 export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
   const [selTrump, setSelTrump] = useState<Suit>('H');
   const [selTricks, setSelTricks] = useState(6);
+  const { playerForSeat, selfName, highestBidText } = useDemoState();
 
   const suits: Suit[] = ['C', 'D', 'H', 'S', 'NT'];
   const numbers = [6, 7, 8, 9, 10, 11, 12, 13];
+  const seats: AuctionSeat[] = [
+    { name: playerForSeat('N').name, seat: 'N', action: '5♥', isHighest: true },
+    { name: playerForSeat('E').name, seat: 'E', action: 'Pass' },
+    { name: playerForSeat('S').name, seat: 'S', action: '5♠' },
+    { name: playerForSeat('W').name, seat: 'W', action: '—', isTurn: true }
+  ];
 
   const AuctionCenter = (
     <View style={s.centerWrap}>
@@ -36,7 +42,7 @@ export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
         <Text style={s.centerBid}>
           5<Text style={{ color: '#e84040' }}>♥</Text>
         </Text>
-        <Text style={s.centerBy}>by Avi</Text>
+        <Text style={s.centerBy}>by {highestBidText.split(' by ')[1]}</Text>
       </View>
       <View style={s.centerGrid}>
         {seats.map((st) => (
@@ -62,17 +68,17 @@ export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
       <ScrollView contentContainerStyle={{ paddingTop: 40, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <GameHeader hand="Hand 1" phase="Auction" />
         <FeltTable
-          north={<SeatChip name="Avi" />}
-          west={<SeatChip name="Dani" isTurn />}
-          east={<SeatChip name="Gila" />}
-          south={<SeatChip name="Yossi" />}
+          north={<SeatChip name={playerForSeat('N').name} />}
+          west={<SeatChip name={playerForSeat('W').name} isTurn />}
+          east={<SeatChip name={playerForSeat('E').name} />}
+          south={<SeatChip name={playerForSeat('S').name} />}
           center={AuctionCenter}
           centerH={200}
         />
 
         {/* Face-down hand */}
         <View style={s.handWrap}>
-          <Text style={s.handLabel}>Your Hand · Dani (West) — auction in progress</Text>
+          <Text style={s.handLabel}>Your Hand · {selfName} (West) — auction in progress</Text>
           <View style={s.handRow}>
             {Array.from({ length: 13 }).map((_, i) => (
               <View key={i} style={{ marginLeft: i === 0 ? 0 : -38, zIndex: i, elevation: i }}>
