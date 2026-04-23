@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import request from "supertest";
+import { newDb } from "pg-mem";
 import { io as createClient } from "socket.io-client";
 import { createAppServer } from "../dist/app.js";
+import { PostgresRoomStore } from "../dist/postgres-store.js";
 
 const waitForSnapshot = (socket) =>
   new Promise((resolve) => {
@@ -152,6 +154,57 @@ try {
     assert.equal(joinedAgain.body.playerToken, east.body.playerToken);
     assert.equal(joinedAgain.body.snapshot.me.seat, "E");
     console.log("ok - same nickname rejoins disconnected player");
+  }
+
+  {
+    const pgDb = newDb();
+    const pgAdapter = pgDb.adapters.createPg();
+    const pgStore = await PostgresRoomStore.create({ pool: new pgAdapter.Pool() });
+    const pgServer = await createAppServer({
+      store: pgStore,
+      allowTestPresets: true,
+      hostTransferGraceMs: 20,
+      roomTtlMs: 500
+    });
+    const pgSockets = [];
+
+    try {
+      await new Promise((resolve) => {
+        pgServer.httpServer.listen(0, "127.0.0.1", () => resolve());
+      });
+      const pgAddress = pgServer.httpServer.address();
+
+      if (!pgAddress || typeof pgAddress === "string") {
+        throw new Error("Missing Postgres-backed server address.");
+      }
+
+      const pgBaseUrl = `http://127.0.0.1:${pgAddress.port}`;
+      const host = await request(pgBaseUrl).post("/api/rooms").send({ nickname: "Pg Host", testPresetKey: "single-suit-hand" });
+      const roomCode = host.body.roomCode;
+      const east = await request(pgBaseUrl).post(`/api/rooms/${roomCode}/join`).send({ nickname: "Pg East" });
+      const south = await request(pgBaseUrl).post(`/api/rooms/${roomCode}/join`).send({ nickname: "Pg South" });
+      const west = await request(pgBaseUrl).post(`/api/rooms/${roomCode}/join`).send({ nickname: "Pg West" });
+      assert.equal(host.status, 201);
+      assert.equal(east.status, 201);
+      assert.equal(south.status, 201);
+      assert.equal(west.status, 201);
+
+      await pgServer.roomManager.assignSeat(host.body.playerToken, host.body.snapshot.me.sessionId, "N");
+      await pgServer.roomManager.assignSeat(host.body.playerToken, east.body.snapshot.me.sessionId, "E");
+      await pgServer.roomManager.assignSeat(host.body.playerToken, south.body.snapshot.me.sessionId, "S");
+      await pgServer.roomManager.assignSeat(host.body.playerToken, west.body.snapshot.me.sessionId, "W");
+      await pgServer.roomManager.startMatch(host.body.playerToken);
+
+      const bootstrap = await request(pgBaseUrl).get(`/api/rooms/${roomCode}/bootstrap`).query({ token: host.body.playerToken });
+
+      assert.equal(bootstrap.body.snapshot.roomStatus, "active");
+      assert.equal(bootstrap.body.snapshot.match.currentHand.phase, "auction");
+      assert.equal(bootstrap.body.snapshot.view.hand.length, 13);
+      console.log("ok - postgres-backed lifecycle matches sqlite flow");
+    } finally {
+      pgSockets.forEach((socket) => socket.disconnect());
+      await pgServer.close();
+    }
   }
 } finally {
   sockets.forEach((socket) => socket.disconnect());

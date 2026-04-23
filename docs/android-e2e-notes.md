@@ -13,7 +13,8 @@
 
 ## Findings So Far
 
-- The Android app is an Expo/React Native prototype under `packages/android`.
+- The Android app is an Expo/React Native client under `packages/android`.
+- It now uses the same shared client transport layer and the same server snapshots/actions as the web app.
 - First live device run reached Expo Go successfully.
 - The first two real runtime blockers were:
   - Metro resolved the workspace root `react@19.2.5` instead of the app-local `react@19.1.0`.
@@ -27,15 +28,34 @@
   - The existing flow file was updated to match that two-step interaction.
 - Gameplay rule check confirmed:
   - The betting screen disables `1` when it would make the total exactly `13`.
+- The Android screens now map to real server state:
+  - `Lobby` for room setup
+  - `Auction`, `PassCards`, `Betting`, `Play`, and `Score` from the shared snapshot/phase model
+- Android session persistence now stores room tokens locally so a device can resume a room after reopening the app.
 
 ## Fixes Applied
 
 - Added `packages/android/metro.config.js` to pin `react` to the app-local install, resolve `react-native` from the hoisted workspace install, and map `scheduler` from `react-native/node_modules`.
-- Added a shared demo-state layer so room code, nickname, host state, and seat labels stay consistent across screens.
-- Updated screens to use the shared demo state so room/player labels stay consistent across the whole game loop.
-- Verified the latest working state in Expo Go on the local `wist-pixel-8` emulator.
+- Replaced the old Android demo flow with a real multiplayer provider backed by:
+  - shared HTTP room/session helpers
+  - shared Socket.IO subscription helpers
+  - AsyncStorage-backed session persistence
+- Updated Android screens to render real room snapshots and emit real gameplay actions.
+- Added server-side Postgres support so hosted/public multiplayer can persist outside local SQLite.
+
+## Verification Status
+
+- Verified:
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test -w @wist/server`
+  - `npm run test:e2e`
+- Remaining caveat in this Codex sandbox:
+  - local fixed-port server binds such as `127.0.0.1:4100` are blocked with `EPERM`, so the final Android smoke test against a live local backend could not be completed inside this sandbox even though server runtime tests and browser e2e passed.
 
 ## Next Steps
 
-- Commit the Android app improvements and notes as a checkpoint.
-- If we want fully automated mobile e2e next, wire the validated flow into a runner that can target Expo Go or a dev client reliably.
+- Verify Android manually against either:
+  - a public Render/Supabase deployment, or
+  - a local backend started outside the sandbox
+- If we want fully automated mobile e2e next, wire the Android flow to a stable runner or Expo dev build target instead of Expo Go.

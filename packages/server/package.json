@@ -9,22 +9,25 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc --project tsconfig.build.json",
     "start": "node dist/index.js",
-    "start:test": "npm.cmd run build -w @wist/core && npm.cmd run build && set ALLOW_TEST_PRESETS=1&& node dist/index.js",
-    "test": "npm.cmd run build -w @wist/core && npm.cmd run build && node test/run.mjs",
+    "start:test": "npm run build -w @wist/core && npm run build && ALLOW_TEST_PRESETS=1 node dist/index.js",
+    "test": "npm run build -w @wist/core && npm run build && node test/run.mjs",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
     "@wist/core": "0.1.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "pg": "^8.16.3",
     "socket.io": "^4.8.1",
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.3",
+    "@types/pg": "^8.15.5",
     "@types/sql.js": "^1.4.9",
     "@types/supertest": "^6.0.3",
+    "pg-mem": "^3.0.5",
     "socket.io-client": "^4.8.1",
     "supertest": "^7.1.4",
     "tsup": "^8.5.0",

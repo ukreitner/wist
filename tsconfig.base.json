@@ -16,6 +16,7 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
+      "@wist/client": ["packages/client/src/index.ts"],
       "@wist/core": ["packages/core/src/index.ts"],
       "@wist/server/*": ["packages/server/src/*"]
     }

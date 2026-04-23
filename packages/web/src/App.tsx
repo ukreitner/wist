@@ -1,7 +1,17 @@
 import { startTransition, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { io, type Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import type { AuctionBid, Card, PrivatePlayerView, PublicMatchState, Seat, Trick, Trump } from "@wist/core";
-import { bootstrapRoom, createRoom, joinRoom, rejoinRoom, sessionKey } from "./api.js";
+import {
+  bootstrapRoom,
+  buildRejoinUrl,
+  buildRoomUrl,
+  connectRoomSocket,
+  createRoom,
+  createSessionStore,
+  getClientConfig,
+  joinRoom,
+  rejoinRoom
+} from "./api.js";
 import PlayingCard from "./components/PlayingCard.js";
 import { LOCALE_STORAGE_KEY, MESSAGES, phaseLabel, seatLabel, trumpLabel, type Locale } from "./i18n.js";
 import {
@@ -37,27 +47,11 @@ const initialLocale = (): Locale => {
   return navigator.language.toLowerCase().startsWith("he") ? "he" : "en";
 };
 
-const usePersistentSession = () => {
-  const save = (session: SessionHandle): void => {
-    localStorage.setItem(sessionKey(session.roomCode), JSON.stringify(session));
-  };
-
-  const load = (roomCode: string): SessionHandle | null => {
-    const raw = localStorage.getItem(sessionKey(roomCode));
-
-    if (!raw) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(raw) as SessionHandle;
-    } catch {
-      return null;
-    }
-  };
-
-  return { save, load };
-};
+const browserSessionStore = createSessionStore({
+  getItem: (key) => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value),
+  removeItem: (key) => localStorage.removeItem(key)
+});
 
 const formatBidChip = (bid: AuctionBid, locale: Locale): string => `${bid.tricks}${trumpLabel(bid.trump, locale)}`;
 const formatTrump = (trump: Trump, locale: Locale): string => trumpLabel(trump, locale);
@@ -82,10 +76,10 @@ export default function App() {
   const heldTrickKeyRef = useRef<string | null>(null);
   const heldTrickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextHandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { save, load } = usePersistentSession();
   const savedNickname = loadProfileNickname();
   const [session, setSession] = useState<SessionHandle | null>(null);
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
+  const [clientConfig, setClientConfig] = useState<{ publicAppUrl: string | null }>({ publicAppUrl: null });
   const [socketState, setSocketState] = useState<"disconnected" | "connecting" | "connected">("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [locale, setLocale] = useState<Locale>(initialLocale);
@@ -106,7 +100,7 @@ export default function App() {
   const socketStateLabel = socketState === "connected" ? t.connected : socketState === "connecting" ? t.connection : t.away;
 
   const rememberSession = (nextSession: SessionHandle): void => {
-    save(nextSession);
+    void browserSessionStore.save(nextSession);
     saveProfileNickname(nextSession.nickname);
     setSession(nextSession);
     setCreateNickname(nextSession.nickname);
@@ -116,51 +110,36 @@ export default function App() {
 
   const connectSocket = (nextSession: SessionHandle): void => {
     socketRef.current?.disconnect();
-    setSocketState("connecting");
-
-    const socket = SERVER_URL
-      ? io(SERVER_URL, {
-          transports: ["websocket"],
-          auth: {
-            roomCode: nextSession.roomCode,
-            token: nextSession.token
-          }
-        })
-      : io({
-          transports: ["websocket"],
-          auth: {
-            roomCode: nextSession.roomCode,
-            token: nextSession.token
-          }
+    socketRef.current = connectRoomSocket({
+      serverUrl: SERVER_URL,
+      session: nextSession,
+      onConnectStateChange: setSocketState,
+      onSnapshot: (nextSnapshot) => {
+        startTransition(() => {
+          setSnapshot(nextSnapshot);
+          setError(null);
         });
-
-    socket.on("connect", () => {
-      setSocketState("connected");
+      },
+      onPresence: (players: SnapshotPlayer[]) => {
+        startTransition(() => {
+          setSnapshot((current) => (current ? { ...current, players } : current));
+        });
+      },
+      onError: (message) => {
+        setError(message);
+      }
     });
-
-    socket.on("disconnect", () => {
-      setSocketState("disconnected");
-    });
-
-    socket.on("snapshot", (nextSnapshot: RoomSnapshot) => {
-      startTransition(() => {
-        setSnapshot(nextSnapshot);
-        setError(null);
-      });
-    });
-
-    socket.on("presence", (players: SnapshotPlayer[]) => {
-      startTransition(() => {
-        setSnapshot((current) => (current ? { ...current, players } : current));
-      });
-    });
-
-    socket.on("error", (payload: { message: string }) => {
-      setError(payload.message);
-    });
-
-    socketRef.current = socket;
   };
+
+  useEffect(() => {
+    void getClientConfig({ serverUrl: SERVER_URL })
+      .then((nextConfig) => {
+        setClientConfig(nextConfig);
+      })
+      .catch(() => {
+        setClientConfig({ publicAppUrl: null });
+      });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(LOCALE_STORAGE_KEY, locale);
@@ -198,7 +177,7 @@ export default function App() {
         }
 
         if (roomFromUrl) {
-          const stored = load(roomFromUrl);
+          const stored = await browserSessionStore.load(roomFromUrl);
 
           if (stored) {
             rememberSession(stored);
@@ -266,10 +245,11 @@ export default function App() {
     []
   );
 
-  const roomUrl = (roomCode: string): string => `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+  const publicAppBaseUrl = clientConfig.publicAppUrl ?? `${window.location.origin}${window.location.pathname}`;
 
-  const rejoinUrl = (roomCode: string, token: string): string =>
-    `${window.location.origin}${window.location.pathname}?room=${roomCode}&token=${token}`;
+  const roomUrl = (roomCode: string): string => buildRoomUrl(publicAppBaseUrl, roomCode);
+
+  const rejoinUrl = (roomCode: string, token: string): string => buildRejoinUrl(publicAppBaseUrl, roomCode, token);
 
   const selectedArchive = archives.find((archive) => archive.id === selectedArchiveId) ?? null;
 

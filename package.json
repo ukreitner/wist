@@ -11,8 +11,8 @@
     "build": "npm run build -w @wist/core && npm run build -w @wist/server && npm run build -w @wist/web",
     "test": "npm run test -w @wist/core && npm run test -w @wist/server",
     "test:e2e": "playwright test",
-    "lint": "npm run typecheck -w @wist/core && npm run typecheck -w @wist/server && npm run typecheck -w @wist/web",
-    "typecheck": "npm run typecheck -w @wist/core && npm run typecheck -w @wist/server && npm run typecheck -w @wist/web",
+    "lint": "npm run typecheck -w @wist/core && npm run typecheck -w @wist/client && npm run typecheck -w @wist/server && npm run typecheck -w @wist/web",
+    "typecheck": "npm run typecheck -w @wist/core && npm run typecheck -w @wist/client && npm run typecheck -w @wist/server && npm run typecheck -w @wist/web",
     "clean": "rimraf packages/*/dist packages/web/.vite packages/web/playwright-report packages/web/test-results"
   },
   "devDependencies": {

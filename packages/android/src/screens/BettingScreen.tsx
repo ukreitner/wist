@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
@@ -6,133 +5,85 @@ import { GameHeader } from '../components/GameHeader';
 import { FeltTable } from '../components/FeltTable';
 import { SeatChip } from '../components/SeatChip';
 import { ChipBtn } from '../components/ChipBtn';
-import { WistCard, type Card } from '../components/WistCard';
+import { HandFan } from '../components/HandFan';
 import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
 
-const HAND: Card[] = [
-  { rank: 14, suit: 'S' }, { rank: 11, suit: 'H' }, { rank: 8, suit: 'C' },
-  { rank: 5, suit: 'D' }, { rank: 2, suit: 'S' }, { rank: 12, suit: 'C' },
-  { rank: 10, suit: 'H' }, { rank: 6, suit: 'D' }, { rank: 4, suit: 'C' },
-  { rank: 3, suit: 'S' }, { rank: 9, suit: 'H' }, { rank: 7, suit: 'D' },
-  { rank: 13, suit: 'C' },
-];
-
 export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
-  const [selBet, setSelBet] = useState<number | null>(null);
-  const { playerForSeat, selfName, contractText } = useDemoState();
-  const betsIn = [
-    { name: playerForSeat('N').name, bet: 7 },
-    { name: playerForSeat('E').name, bet: 2 },
-    { name: playerForSeat('S').name, bet: 3 }
-  ];
-  const total = betsIn.reduce((acc, b) => acc + b.bet, 0);
+  const { playerForSeat, selfName, contractText, hand, bettingValues, minimumBet, currentBets, currentTaken, currentTurn, submitBet, error, clearError } = useDemoState();
+  const otherSeats = (['N', 'E', 'S', 'W'] as const).filter((seat) => seat !== 'W');
+  const total = Object.values(currentBets).reduce<number>((sum, value) => sum + (value ?? 0), 0);
   const forbidden = 13 - total;
-  const betOptions = Array.from({ length: 14 }, (_, i) => i);
 
   const BettingCenter = (
     <View style={s.centerWrap}>
       <View style={s.centerTop}>
         <Text style={s.centerEyebrow}>Contract</Text>
-        <Text style={s.centerBid}>
-          6<Text style={{ color: '#e84040' }}>♥</Text> by {playerForSeat('N').name}
-        </Text>
+        <Text style={s.centerBid}>{contractText ?? 'Waiting for contract'}</Text>
       </View>
       <View style={s.centerGrid}>
-        {[...betsIn, { name: selfName, bet: '?', isMe: true }].map((p) => (
-          <View key={p.name} style={[s.centerCell, (p as any).isMe && s.centerCellMe]}>
-            <Text style={s.centerCellSeat}>{(p as any).isMe ? '▶ YOU' : 'BET'}</Text>
-            <Text style={s.centerCellName} numberOfLines={1}>{p.name}</Text>
-            <Text style={[s.centerCellAction, (p as any).isMe && { color: T.goldSoft }]}>
-              {selBet !== null && (p as any).isMe ? selBet : p.bet}
-            </Text>
+        {[...otherSeats, 'W' as const].map((seat) => (
+          <View key={seat} style={[s.centerCell, currentTurn === seat && s.centerCellMe]}>
+            <Text style={s.centerCellSeat}>{currentTurn === seat ? '▶ TURN' : seat}</Text>
+            <Text style={s.centerCellName} numberOfLines={1}>{seat === 'W' ? selfName : playerForSeat(seat).name}</Text>
+            <Text style={s.centerCellAction}>{currentBets[seat] ?? '?'}</Text>
           </View>
         ))}
       </View>
-      <Text style={s.totalText}>
-        Total so far: <Text style={{ color: T.goldSoft, fontWeight: '700' }}>
-          {total}{selBet !== null ? ` + ${selBet} = ${total + selBet}` : ''}
-        </Text>
-      </Text>
+      <Text style={s.totalText}>Total bets so far: {total}</Text>
     </View>
   );
 
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
       <ScrollView contentContainerStyle={{ paddingTop: 40, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <GameHeader hand="Hand 1" phase="Betting" contract={contractText} />
+        <GameHeader hand="Current Hand" phase="Betting" contract={contractText ?? undefined} />
         <FeltTable
-          north={<SeatChip name={playerForSeat('N').name} />}
-          west={<SeatChip name={playerForSeat('W').name} isTurn />}
-          east={<SeatChip name={playerForSeat('E').name} />}
-          south={<SeatChip name={playerForSeat('S').name} />}
+          north={<SeatChip name={playerForSeat('N').name} bid={currentBets.N} taken={currentTaken.N} isTurn={currentTurn === 'N'} connected={playerForSeat('N').connected} />}
+          west={<SeatChip name={playerForSeat('W').name} bid={currentBets.W} taken={currentTaken.W} isTurn={currentTurn === 'W'} connected={playerForSeat('W').connected} />}
+          east={<SeatChip name={playerForSeat('E').name} bid={currentBets.E} taken={currentTaken.E} isTurn={currentTurn === 'E'} connected={playerForSeat('E').connected} />}
+          south={<SeatChip name={playerForSeat('S').name} bid={currentBets.S} taken={currentTaken.S} isTurn={currentTurn === 'S'} connected={playerForSeat('S').connected} />}
           center={BettingCenter}
           centerH={220}
         />
 
-        {/* Hand peek */}
         <View style={s.handWrap}>
-          <Text style={s.handLabel}>Your Hand (peek before betting)</Text>
-          <View style={s.handRow}>
-            {HAND.map((card, i) => (
-              <View key={`${card.rank}${card.suit}`} style={{ marginLeft: i === 0 ? 0 : -40, zIndex: i, elevation: i }}>
-                <WistCard rank={card.rank} suit={card.suit} width={54} />
-              </View>
-            ))}
-          </View>
+          <Text style={s.handLabel}>Your Hand · {selfName}</Text>
+          <HandFan cards={hand} />
         </View>
 
-        {/* Bet picker */}
         <View style={s.panel}>
           <View style={s.panelHeader}>
             <Text style={s.panelTitle}>How many tricks?</Text>
-            {selBet !== null && (
-              <View style={s.pill}>
-                <Text style={s.pillText}>{selBet} tricks</Text>
-              </View>
-            )}
+            <View style={s.pill}>
+              <Text style={s.pillText}>Min {minimumBet}</Text>
+            </View>
           </View>
 
-          <View style={s.warn}>
-            <Text style={s.warnText}>⚠ Cannot bet {forbidden} — would total exactly 13</Text>
-          </View>
+          {bettingValues.includes(forbidden) ? (
+            <View style={s.warn}>
+              <Text style={s.warnText}>Cannot bet {forbidden} because it would total exactly 13.</Text>
+            </View>
+          ) : null}
 
           <View style={{ gap: 5 }}>
-            <View style={s.grid7}>
-              {betOptions.slice(0, 7).map((n) => (
+            <View style={s.grid}>
+              {bettingValues.map((value) => (
                 <ChipBtn
-                  key={n}
-                  label={n}
-                  selected={selBet === n}
-                  disabled={n === forbidden}
-                  onPress={() => setSelBet(n)}
-                  testID={`bet-${n}`}
-                />
-              ))}
-            </View>
-            <View style={s.grid7}>
-              {betOptions.slice(7).map((n) => (
-                <ChipBtn
-                  key={n}
-                  label={n}
-                  selected={selBet === n}
-                  disabled={n === forbidden}
-                  onPress={() => setSelBet(n)}
-                  testID={`bet-${n}`}
+                  key={value}
+                  label={value}
+                  selected={false}
+                  onPress={() => {
+                    clearError();
+                    submitBet(value);
+                  }}
+                  disabled={value < minimumBet}
+                  testID={`bet-${value}`}
                 />
               ))}
             </View>
           </View>
-
-          <TouchableOpacity
-            testID="cta-bet"
-            style={[s.cta, selBet === null && s.ctaDisabled]}
-            onPress={() => selBet !== null && navigation.navigate('Play')}
-          >
-            <Text style={[s.ctaText, selBet === null && s.ctaTextDisabled]}>
-              {selBet !== null ? `Bet ${selBet} trick${selBet !== 1 ? 's' : ''} →` : 'Select your bet'}
-            </Text>
-          </TouchableOpacity>
+          {error ? <Text style={s.errorText}>{error}</Text> : null}
         </View>
       </ScrollView>
     </LinearGradient>
@@ -160,7 +111,7 @@ const s = StyleSheet.create({
     color: 'rgba(250,237,207,0.65)',
     marginBottom: 3,
   },
-  centerBid: { fontFamily: T.serif, fontSize: 18, color: '#faedcf' },
+  centerBid: { fontFamily: T.serif, fontSize: 16, color: '#faedcf', textAlign: 'center' },
   centerGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   centerCell: {
     width: '48%',
@@ -202,7 +153,6 @@ const s = StyleSheet.create({
     color: 'rgba(246,231,201,0.45)',
     marginBottom: 8,
   },
-  handRow: { flexDirection: 'row', alignItems: 'flex-end' },
   panel: {
     marginTop: 10,
     marginHorizontal: 12,
@@ -226,14 +176,6 @@ const s = StyleSheet.create({
     borderColor: 'rgba(142,62,56,0.18)',
   },
   warnText: { fontSize: 11, color: T.wine, fontWeight: '700' },
-  grid7: { flexDirection: 'row', gap: 5 },
-  cta: {
-    paddingVertical: 13,
-    borderRadius: 99,
-    backgroundColor: T.gold,
-    alignItems: 'center',
-  },
-  ctaDisabled: { backgroundColor: 'rgba(18,42,32,0.08)' },
-  ctaText: { color: '#1c2024', fontWeight: '700', fontSize: 14 },
-  ctaTextDisabled: { color: T.muted },
+  grid: { flexDirection: 'row', gap: 5, flexWrap: 'wrap' },
+  errorText: { color: T.wine, fontWeight: '700', fontSize: 12, textAlign: 'center' },
 });

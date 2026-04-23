@@ -1,4 +1,5 @@
 import type { Card, GameEvent, MatchState, PrivatePlayerView, PublicMatchState, Seat } from "@wist/core";
+import type { RoomStore } from "./room-store.js";
 
 export interface PlayerSession {
   id: string;
@@ -64,10 +65,12 @@ export interface RoomSnapshot {
 }
 
 export interface RoomManagerConfig {
-  dbPath: string;
+  dbPath?: string;
+  databaseUrl?: string;
   roomTtlMs: number;
   allowTestPresets: boolean;
   testPresets: Record<string, TestScenario>;
+  store?: RoomStore;
 }
 
 export interface PersistedRoomRow {

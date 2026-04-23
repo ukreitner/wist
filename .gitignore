@@ -13,3 +13,4 @@ test-results
 emulator-current.png
 latest-logcat.txt
 latest-ui.xml
+screen-*.png

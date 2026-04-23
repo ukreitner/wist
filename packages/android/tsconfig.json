@@ -1,6 +1,11 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@wist/client": ["packages/client/src/index.ts"],
+      "@wist/core": ["packages/core/src/index.ts"]
+    }
   }
 }

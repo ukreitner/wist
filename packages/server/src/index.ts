@@ -7,7 +7,9 @@ const start = async (): Promise<void> => {
   const { httpServer } = await createAppServer({
     port,
     dbPath: process.env.WIST_DB_PATH ?? ".data/wist.sqlite",
+    databaseUrl: process.env.DATABASE_URL,
     staticDir: process.env.WIST_STATIC_DIR,
+    publicAppUrl: process.env.PUBLIC_APP_URL,
     allowTestPresets: process.env.ALLOW_TEST_PRESETS === "1"
   });
 

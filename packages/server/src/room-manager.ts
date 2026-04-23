@@ -12,6 +12,8 @@ import {
   type MatchState,
   type Seat
 } from "@wist/core";
+import { PostgresRoomStore } from "./postgres-store.js";
+import type { RoomStore } from "./room-store.js";
 import { SqliteRoomStore } from "./store.js";
 import type {
   PlayerSession,
@@ -71,19 +73,23 @@ export class RoomManager {
   private readonly roomCodeByToken = new Map<string, string>();
 
   private constructor(
-    private readonly store: SqliteRoomStore,
+    private readonly store: RoomStore,
     private readonly config: RoomManagerConfig
   ) {}
 
   static async create(config: RoomManagerConfig): Promise<RoomManager> {
-    const store = await SqliteRoomStore.create(config.dbPath);
+    const store =
+      config.store ??
+      (config.databaseUrl
+        ? await PostgresRoomStore.create({ connectionString: config.databaseUrl })
+        : await SqliteRoomStore.create(config.dbPath ?? ".data/wist.sqlite"));
     const manager = new RoomManager(store, config);
 
-    for (const room of store.loadRooms()) {
+    for (const room of await store.loadRooms()) {
       if (room.events.length > 0) {
         room.match = manager.rebuildMatch(room);
         room.status = room.match.status === "ended" ? "ended" : "active";
-        store.saveRoom(room);
+        await store.saveRoom(room);
       }
 
       manager.roomsByCode.set(room.code, room);
@@ -96,9 +102,13 @@ export class RoomManager {
     return manager;
   }
 
-  private persist(room: RoomState): RoomState {
+  async close(): Promise<void> {
+    await this.store.close();
+  }
+
+  private async persist(room: RoomState): Promise<RoomState> {
     room.updatedAt = nowIso();
-    this.store.saveRoom(room);
+    await this.store.saveRoom(room);
     this.roomsByCode.set(room.code, room);
 
     for (const session of room.sessions) {
@@ -205,7 +215,7 @@ export class RoomManager {
     return session;
   }
 
-  createRoom(nickname: string, testPresetKey?: string): { room: RoomState; session: PlayerSession } {
+  async createRoom(nickname: string, testPresetKey?: string): Promise<{ room: RoomState; session: PlayerSession }> {
     const trimmedNickname = nickname.trim();
 
     if (!trimmedNickname) {
@@ -248,11 +258,11 @@ export class RoomManager {
       testPresetCursor: 0
     };
 
-    this.persist(room);
+    await this.persist(room);
     return { room, session };
   }
 
-  joinRoom(code: string, nickname: string): { room: RoomState; session: PlayerSession } {
+  async joinRoom(code: string, nickname: string): Promise<{ room: RoomState; session: PlayerSession }> {
     const room = this.lookupRoom(code);
     const trimmedNickname = nickname.trim();
 
@@ -271,7 +281,7 @@ export class RoomManager {
 
       existingSession.nickname = trimmedNickname;
       existingSession.lastSeenAt = nowIso();
-      this.persist(room);
+      await this.persist(room);
       return { room, session: existingSession };
     }
 
@@ -294,7 +304,7 @@ export class RoomManager {
     };
 
     room.sessions.push(session);
-    this.persist(room);
+    await this.persist(room);
 
     return { room, session };
   }
@@ -346,7 +356,7 @@ export class RoomManager {
     };
   }
 
-  assignSeat(actorToken: string, targetSessionId: string, targetSeat: Seat): RoomState {
+  async assignSeat(actorToken: string, targetSessionId: string, targetSeat: Seat): Promise<RoomState> {
     const room = this.lookupSessionRoom(actorToken);
     this.assertHost(room, actorToken);
 
@@ -369,7 +379,7 @@ export class RoomManager {
     return this.persist(room);
   }
 
-  startMatch(actorToken: string): RoomState {
+  async startMatch(actorToken: string): Promise<RoomState> {
     const room = this.lookupSessionRoom(actorToken);
     this.assertHost(room, actorToken);
 
@@ -393,7 +403,7 @@ export class RoomManager {
     return this.persist(room);
   }
 
-  startNextHand(actorToken: string): RoomState {
+  async startNextHand(actorToken: string): Promise<RoomState> {
     const room = this.lookupSessionRoom(actorToken);
     this.assertHost(room, actorToken);
 
@@ -408,7 +418,7 @@ export class RoomManager {
     return this.persist(room);
   }
 
-  endMatch(actorToken: string): RoomState {
+  async endMatch(actorToken: string): Promise<RoomState> {
     const room = this.lookupSessionRoom(actorToken);
     this.assertHost(room, actorToken);
 
@@ -428,10 +438,10 @@ export class RoomManager {
     return this.persist(room);
   }
 
-  appendGameEvent(actorToken: string, event: PlayerGameInput): {
+  async appendGameEvent(actorToken: string, event: PlayerGameInput): Promise<{
     room: RoomState;
     appended: GameEvent;
-  } {
+  }> {
     const { room, session } = this.getRoomForToken(actorToken);
 
     if (!session.seat) {
@@ -455,11 +465,11 @@ export class RoomManager {
       room.status = "ended";
     }
 
-    this.persist(room);
+    await this.persist(room);
     return { room, appended };
   }
 
-  requestUndo(actorToken: string): { room: RoomState; appended: GameEvent } {
+  async requestUndo(actorToken: string): Promise<{ room: RoomState; appended: GameEvent }> {
     const { room, session } = this.getRoomForToken(actorToken);
 
     if (!session.seat) {
@@ -478,14 +488,14 @@ export class RoomManager {
     });
   }
 
-  setSessionConnected(token: string, connected: boolean): RoomState {
+  async setSessionConnected(token: string, connected: boolean): Promise<RoomState> {
     const { room, session } = this.getRoomForToken(token);
     session.connected = connected;
     session.lastSeenAt = nowIso();
     return this.persist(room);
   }
 
-  transferHost(roomCode: string): RoomState | null {
+  async transferHost(roomCode: string): Promise<RoomState | null> {
     const room = this.lookupRoom(roomCode);
     const currentHost = room.sessions.find((session) => session.id === room.hostSessionId);
     const eligibleSessions = room.sessions.filter((session) => session.id !== room.hostSessionId);
@@ -511,7 +521,7 @@ export class RoomManager {
     return this.persist(room);
   }
 
-  leaveRoom(token: string): RoomState | null {
+  async leaveRoom(token: string): Promise<RoomState | null> {
     const { room, session } = this.getRoomForToken(token);
 
     if (room.status === "lobby") {
@@ -520,7 +530,7 @@ export class RoomManager {
       if (room.sessions.length === 0) {
         this.roomsByCode.delete(room.code);
         this.roomCodeByToken.delete(session.token);
-        this.store.deleteRoom(room.id);
+        await this.store.deleteRoom(room.id);
         return null;
       }
 
@@ -536,7 +546,7 @@ export class RoomManager {
     return this.persist(room);
   }
 
-  cleanupExpiredRooms(referenceTime = Date.now()): string[] {
+  async cleanupExpiredRooms(referenceTime = Date.now()): Promise<string[]> {
     const deletedCodes: string[] = [];
 
     for (const room of this.roomsByCode.values()) {
@@ -554,7 +564,7 @@ export class RoomManager {
         this.roomCodeByToken.delete(session.token);
       }
 
-      this.store.deleteRoom(room.id);
+      await this.store.deleteRoom(room.id);
     }
 
     return deletedCodes;

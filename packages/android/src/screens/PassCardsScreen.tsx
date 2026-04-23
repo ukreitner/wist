@@ -2,21 +2,13 @@ import { useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, TouchableWithoutFeedback } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
-import { WistCard, type Card } from '../components/WistCard';
+import { WistCard } from '../components/WistCard';
 import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
 
-const HAND: Card[] = [
-  { rank: 14, suit: 'S' }, { rank: 11, suit: 'H' }, { rank: 8, suit: 'C' },
-  { rank: 5, suit: 'D' }, { rank: 2, suit: 'S' }, { rank: 12, suit: 'C' },
-  { rank: 10, suit: 'H' }, { rank: 6, suit: 'D' }, { rank: 4, suit: 'C' },
-  { rank: 3, suit: 'S' }, { rank: 9, suit: 'H' }, { rank: 7, suit: 'D' },
-  { rank: 13, suit: 'C' },
-];
-
 export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
   const [selected, setSelected] = useState<string[]>([]);
-  const { leftOfSelf } = useDemoState();
+  const { leftOfSelf, hand, legalPassCardCodes, submitPass, error, clearError } = useDemoState();
 
   const toggle = (key: string) => {
     setSelected((prev) => {
@@ -33,13 +25,10 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={s.header}>
-          <View style={s.allPassedPill}>
-            <Text style={s.allPassedText}>All players passed!</Text>
-          </View>
           <Text style={s.eyebrow}>Hand 1 · Special Rule</Text>
           <Text style={s.title}>Pass 3 Cards Left</Text>
           <Text style={s.lede}>
-            Select 3 cards to pass to <Text style={s.ledeStrong}>{leftOfSelf.name} (South)</Text>. All players pass simultaneously.
+            Select 3 cards to pass to <Text style={s.ledeStrong}>{leftOfSelf.name}</Text>. All players pass simultaneously.
           </Text>
         </View>
 
@@ -61,15 +50,16 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
         <View style={{ gap: 10 }}>
           <Text style={s.sectionLabel}>Your Hand (tap to select)</Text>
           <View style={s.handGrid}>
-            {HAND.map((card) => {
-              const key = `${card.rank}-${card.suit}`;
-              const isSel = selected.includes(key);
+            {hand.map((card) => {
+              const testKey = `${card.rank}-${card.suit}`;
+              const isSel = selected.includes(card.code);
+              const isPlayable = legalPassCardCodes.includes(card.code);
               return (
-                <TouchableWithoutFeedback key={key} onPress={() => toggle(key)}>
+                <TouchableWithoutFeedback key={card.code} onPress={() => toggle(card.code)}>
                   <View
-                    testID={`card-${key}`}
+                    testID={`card-${testKey}`}
                     accessible
-                    accessibilityLabel={`card-${key}`}
+                    accessibilityLabel={`card-${testKey}`}
                     style={{ transform: [{ translateY: isSel ? -10 : 0 }] }}
                   >
                     <WistCard
@@ -77,7 +67,7 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
                       suit={card.suit}
                       width={54}
                       selected={false}
-                      playable={!isSel && selected.length < 3}
+                      playable={isPlayable && (!selected.length || isSel || selected.length < 3)}
                     />
                   </View>
                 </TouchableWithoutFeedback>
@@ -92,8 +82,13 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
             <Text style={s.previewLabel}>Passing:</Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {selected.map((k) => {
-                const [r, st] = k.split('-');
-                return <WistCard key={k} rank={parseInt(r, 10)} suit={st as 'C' | 'D' | 'H' | 'S'} width={44} />;
+                const card = hand.find((entry) => entry.code === k);
+
+                if (!card) {
+                  return null;
+                }
+
+                return <WistCard key={k} rank={card.rank} suit={card.suit} width={44} />;
               })}
             </View>
           </View>
@@ -103,12 +98,17 @@ export default function PassCardsScreen({ navigation }: NavProps<'PassCards'>) {
         <TouchableOpacity
           testID="cta-pass-cards"
           style={[s.cta, n !== 3 && s.ctaDisabled]}
-          onPress={() => n === 3 && navigation.navigate('Auction')}
+          onPress={() => {
+            if (n !== 3) return;
+            clearError();
+            submitPass(selected);
+          }}
         >
           <Text style={s.ctaText}>
             {n === 3 ? `Pass Cards to ${leftOfSelf.name} →` : `Select ${3 - n} more card${3 - n !== 1 ? 's' : ''}`}
           </Text>
         </TouchableOpacity>
+        {error ? <Text style={s.errorText}>{error}</Text> : null}
       </ScrollView>
     </LinearGradient>
   );
@@ -125,17 +125,6 @@ const s = StyleSheet.create({
     borderBottomColor: 'rgba(245,219,173,0.08)',
     gap: 4,
   },
-  allPassedPill: {
-    alignSelf: 'flex-start',
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 99,
-    backgroundColor: 'rgba(142,62,56,0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(142,62,56,0.35)',
-    marginBottom: 6,
-  },
-  allPassedText: { fontSize: 12, color: '#e4a89e', fontWeight: '800' },
   eyebrow: { fontSize: 10, color: 'rgba(246,231,201,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' },
   title: { fontFamily: T.serif, fontSize: 22, color: '#f6e7c9', marginTop: 2 },
   lede: { fontSize: 12, color: 'rgba(246,231,201,0.65)', lineHeight: 18 },
@@ -203,4 +192,5 @@ const s = StyleSheet.create({
   },
   ctaDisabled: { opacity: 0.5 },
   ctaText: { color: '#1c2024', fontWeight: '700', fontSize: 14 },
+  errorText: { color: '#f1a39c', fontWeight: '700', fontSize: 12, textAlign: 'center' },
 });

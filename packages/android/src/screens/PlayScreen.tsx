@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { T, SUIT_SYM, rankLabel } from '../theme';
@@ -6,27 +6,17 @@ import { GameHeader } from '../components/GameHeader';
 import { FeltTable } from '../components/FeltTable';
 import { SeatChip } from '../components/SeatChip';
 import { HandFan } from '../components/HandFan';
-import { WistCard, type Card, type Suit } from '../components/WistCard';
+import { WistCard } from '../components/WistCard';
 import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
+import type { Seat } from '@wist/core';
 
-const MY_HAND: Card[] = [
-  { rank: 14, suit: 'S' }, { rank: 11, suit: 'H' }, { rank: 8, suit: 'C' },
-  { rank: 5, suit: 'D' }, { rank: 2, suit: 'S' }, { rank: 12, suit: 'C' },
-  { rank: 10, suit: 'H' }, { rank: 6, suit: 'D' }, { rank: 4, suit: 'C' },
-  { rank: 3, suit: 'S' },
-];
-
-const PLAYABLE = new Set(['11-H', '10-H']);
-
-type TrickCardT = { seat: 'N' | 'E' | 'S' | 'W'; name: string; rank: number; suit: Suit };
-
-function TrickCardSlot({ seat, name, rank, suit }: TrickCardT) {
+function TrickCardSlot({ seat, name, rank, suit }: { seat: Seat; name: string; rank: number; suit: 'C' | 'D' | 'H' | 'S' }) {
   const pos =
     seat === 'N' ? { top: 6, left: '50%' as const, transform: [{ translateX: -29 }] } :
     seat === 'E' ? { right: 6, top: '42%' as const, transform: [{ translateY: -40 }] } :
     seat === 'S' ? { bottom: 6, left: '50%' as const, transform: [{ translateX: -29 }] } :
-    /* W */        { left: 6, top: '42%' as const, transform: [{ translateY: -40 }] };
+    { left: 6, top: '42%' as const, transform: [{ translateY: -40 }] };
 
   return (
     <View style={[s.trickSlot, pos]}>
@@ -40,83 +30,93 @@ function TrickCardSlot({ seat, name, rank, suit }: TrickCardT) {
 
 export default function PlayScreen({ navigation }: NavProps<'Play'>) {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
-  const { playerForSeat, selfName, contractText } = useDemoState();
-  const trick: TrickCardT[] = [
-    { seat: 'N', name: playerForSeat('N').name, rank: 7, suit: 'H' },
-    { seat: 'E', name: playerForSeat('E').name, rank: 3, suit: 'H' },
-    { seat: 'S', name: playerForSeat('S').name, rank: 13, suit: 'D' }
-  ];
+  const { playerForSeat, selfName, contractText, hand, legalPlayCardCodes, currentTrick, completedTricks, currentBets, currentTaken, currentTurn, playCard, error, clearError } = useDemoState();
+  const playable = useMemo(() => new Set(legalPlayCardCodes.map((code) => {
+    const card = hand.find((entry) => entry.code === code);
+    return card ? `${card.rank}-${card.suit}` : code;
+  })), [hand, legalPlayCardCodes]);
+  const latestTrick = completedTricks.at(-1) ?? null;
 
   const TrickCenter = (
     <View style={s.trickCenter}>
-      {trick.map((t) => (
-        <TrickCardSlot key={t.seat} {...t} />
+      {currentTrick?.plays.map((play: { seat: Seat; card: { code: string; rank: number; suit: 'C' | 'D' | 'H' | 'S' } }) => (
+        <TrickCardSlot
+          key={`${play.seat}-${play.card.code}`}
+          seat={play.seat}
+          name={playerForSeat(play.seat).name}
+          rank={play.card.rank}
+          suit={play.card.suit}
+        />
       ))}
-      <View style={s.yourTurnPill}>
-        <Text style={s.yourTurnText}>▶ Your turn</Text>
-      </View>
+      {currentTurn ? (
+        <View style={s.yourTurnPill}>
+          <Text style={s.yourTurnText}>{currentTurn === 'W' ? '▶ Your turn' : `${playerForSeat(currentTurn).name} to play`}</Text>
+        </View>
+      ) : null}
     </View>
   );
-
-  const [r, st] = selectedCard ? selectedCard.split('-') : [null, null];
 
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
       <ScrollView contentContainerStyle={{ paddingTop: 40, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <GameHeader hand="Hand 1 · Trick 4" phase="Playing" contract={contractText} trumpSym="♥" trumpColor="#e84040" />
+        <GameHeader hand="Current Hand" phase="Playing" contract={contractText ?? undefined} />
         <FeltTable
-          north={<SeatChip name={playerForSeat('N').name} bid={6} taken={2} />}
-          west={<SeatChip name={playerForSeat('W').name} bid={2} taken={1} isTurn />}
-          east={<SeatChip name={playerForSeat('E').name} bid={2} taken={1} />}
-          south={<SeatChip name={playerForSeat('S').name} bid={3} taken={3} />}
+          north={<SeatChip name={playerForSeat('N').name} bid={currentBets.N} taken={currentTaken.N} isTurn={currentTurn === 'N'} connected={playerForSeat('N').connected} />}
+          west={<SeatChip name={playerForSeat('W').name} bid={currentBets.W} taken={currentTaken.W} isTurn={currentTurn === 'W'} connected={playerForSeat('W').connected} />}
+          east={<SeatChip name={playerForSeat('E').name} bid={currentBets.E} taken={currentTaken.E} isTurn={currentTurn === 'E'} connected={playerForSeat('E').connected} />}
+          south={<SeatChip name={playerForSeat('S').name} bid={currentBets.S} taken={currentTaken.S} isTurn={currentTurn === 'S'} connected={playerForSeat('S').connected} />}
           center={TrickCenter}
           centerH={230}
         />
 
-        {/* Last trick strip */}
-        <View style={s.lastTrick}>
-          <View>
-            <Text style={s.lastEyebrow}>Last trick</Text>
-            <Text style={s.lastWinner}>Won by {playerForSeat('N').name}</Text>
+        {latestTrick ? (
+          <View style={s.lastTrick}>
+            <View>
+              <Text style={s.lastEyebrow}>Last trick</Text>
+              <Text style={s.lastWinner}>Won by {playerForSeat(latestTrick.winner).name}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 4, marginLeft: 'auto' }}>
+              {latestTrick.plays.map((play: { seat: Seat; card: { code: string; rank: number; suit: 'C' | 'D' | 'H' | 'S' } }) => (
+                <WistCard key={`${play.seat}-${play.card.code}`} rank={play.card.rank} suit={play.card.suit} width={36} />
+              ))}
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 4, marginLeft: 'auto' }}>
-            {[{ r: 14, s: 'H' as Suit }, { r: 9, s: 'H' as Suit }, { r: 8, s: 'D' as Suit }, { r: 2, s: 'C' as Suit }].map((c, i) => (
-              <WistCard key={i} rank={c.r} suit={c.s} width={36} />
-            ))}
-          </View>
-        </View>
+        ) : null}
 
-        {/* My hand */}
         <View style={{ paddingHorizontal: 12, paddingTop: 10, gap: 8 }}>
-          <Text style={s.handLabel}>Your Hand · {selfName} — tap a card to play</Text>
+          <Text style={s.handLabel}>Your Hand · {selfName}</Text>
           <HandFan
-            cards={MY_HAND}
-            playable={PLAYABLE}
+            cards={hand}
+            playable={playable}
             selectedCard={selectedCard}
-            onCardPress={(key) => setSelectedCard(selectedCard === key ? null : key)}
+            onCardPress={(key) => setSelectedCard(selectedCard === key ? null : hand.find((entry) => `${entry.rank}-${entry.suit}` === key)?.code ?? null)}
           />
         </View>
 
-        {/* Action */}
-        {selectedCard && r && st ? (
+        {selectedCard ? (
           <View style={s.selectedPanel}>
             <View>
               <Text style={s.selectedEyebrow}>Selected</Text>
-              <Text style={s.selectedCard}>{rankLabel(parseInt(r, 10))} {SUIT_SYM[st as 'C' | 'D' | 'H' | 'S']}</Text>
+              <Text style={s.selectedCard}>{selectedCard}</Text>
             </View>
             <TouchableOpacity
               testID="cta-play"
               style={s.playBtn}
-              onPress={() => navigation.navigate('Score')}
+              onPress={() => {
+                clearError();
+                playCard(selectedCard);
+                setSelectedCard(null);
+              }}
             >
-              <Text style={s.playBtnText}>Play Card →</Text>
+              <Text style={s.playBtnText}>Play Card</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={s.hintPanel}>
-            <Text style={s.hintText}>Tap a card to play · Must follow hearts ♥</Text>
+            <Text style={s.hintText}>{currentTurn === 'W' ? 'Tap a highlighted card to play.' : `${playerForSeat(currentTurn ?? 'N').name} is up.`}</Text>
           </View>
         )}
+        {error ? <Text style={s.errorText}>{error}</Text> : null}
       </ScrollView>
     </LinearGradient>
   );
@@ -190,7 +190,6 @@ const s = StyleSheet.create({
     color: 'rgba(246,231,201,0.5)',
   },
   selectedPanel: {
-    marginTop: 0,
     marginHorizontal: 12,
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -223,4 +222,5 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   hintText: { fontSize: 12, color: 'rgba(246,231,201,0.7)', fontWeight: '600' },
+  errorText: { color: T.wine, fontWeight: '700', fontSize: 12, textAlign: 'center' },
 });

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic, type SqlValue } from "sql.js";
 import type { GameEvent } from "@wist/core";
+import type { RoomStore } from "./room-store.js";
 import type { PersistedRoomRow, PlayerSession, RoomState } from "./types.js";
 
 const mapRows = <Row>(database: Database, query: string, params: SqlValue[] = []): Row[] => {
@@ -22,7 +23,7 @@ const mapRows = <Row>(database: Database, query: string, params: SqlValue[] = []
   });
 };
 
-export class SqliteRoomStore {
+export class SqliteRoomStore implements RoomStore {
   private readonly database: Database;
 
   private constructor(
@@ -87,7 +88,7 @@ export class SqliteRoomStore {
     fs.writeFileSync(this.dbPath, Buffer.from(bytes));
   }
 
-  loadRooms(): RoomState[] {
+  async loadRooms(): Promise<RoomState[]> {
     const roomRows = mapRows<PersistedRoomRow>(this.database, "SELECT * FROM rooms ORDER BY createdAt ASC");
 
     return roomRows.map((roomRow) => {
@@ -129,7 +130,7 @@ export class SqliteRoomStore {
     });
   }
 
-  saveRoom(room: RoomState): void {
+  async saveRoom(room: RoomState): Promise<void> {
     this.database.run(
       `
         INSERT INTO rooms (id, code, hostSessionId, createdAt, updatedAt, status, snapshotJson, testPresetKey, testPresetCursor)
@@ -191,10 +192,14 @@ export class SqliteRoomStore {
     this.flush();
   }
 
-  deleteRoom(roomId: string): void {
+  async deleteRoom(roomId: string): Promise<void> {
     this.database.run("DELETE FROM events WHERE roomId = ?", [roomId]);
     this.database.run("DELETE FROM sessions WHERE roomId = ?", [roomId]);
     this.database.run("DELETE FROM rooms WHERE id = ?", [roomId]);
     this.flush();
+  }
+
+  async close(): Promise<void> {
+    this.database.close();
   }
 }

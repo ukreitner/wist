@@ -9,7 +9,8 @@ export default function HomeScreen({ navigation }: NavProps<'Home'>) {
   const [createName, setCreateName] = useState('Dani');
   const [joinCode, setJoinCode] = useState('');
   const [joinName, setJoinName] = useState('Dani');
-  const { createRoom, joinRoom, resumeRoom, recentRooms } = useDemoState();
+  const [busy, setBusy] = useState(false);
+  const { createRoom, joinRoom, resumeRoom, recentRooms, error, clearError } = useDemoState();
   const canCreate = createName.trim().length > 0;
   const canJoin = joinCode.trim().length > 0 && joinName.trim().length > 0;
 
@@ -31,12 +32,17 @@ export default function HomeScreen({ navigation }: NavProps<'Home'>) {
           <TextInput style={s.input} value={createName} onChangeText={setCreateName} placeholder="Your nickname" placeholderTextColor="#8a8a8a" />
           <Cta
             label="Create Room"
-            onPress={() => {
+            onPress={async () => {
               if (!canCreate) return;
-              createRoom(createName);
-              navigation.navigate('Lobby');
+              clearError();
+              setBusy(true);
+              try {
+                await createRoom(createName);
+              } finally {
+                setBusy(false);
+              }
             }}
-            disabled={!canCreate}
+            disabled={!canCreate || busy}
             testID="cta-create"
           />
         </Panel>
@@ -46,28 +52,38 @@ export default function HomeScreen({ navigation }: NavProps<'Home'>) {
           <TextInput style={s.input} value={joinName} onChangeText={setJoinName} placeholder="Your nickname" placeholderTextColor="#8a8a8a" />
           <Cta
             label="Join Room"
-            onPress={() => {
+            onPress={async () => {
               if (!canJoin) return;
-              joinRoom(joinCode, joinName);
-              navigation.navigate('Lobby');
+              clearError();
+              setBusy(true);
+              try {
+                await joinRoom(joinCode, joinName);
+              } finally {
+                setBusy(false);
+              }
             }}
-            disabled={!canJoin}
+            disabled={!canJoin || busy}
             testID="cta-join"
           />
         </Panel>
 
         <Panel label="On this device" heading="Recent Rooms">
           {recentRooms.map((r) => (
-            <View key={r.code} style={s.recent}>
+            <View key={`${r.code}-${r.token}`} style={s.recent}>
               <View>
                 <Text style={s.recentCode}>{r.code}</Text>
                 <Text style={s.recentMeta}>{r.nick} · {r.time}</Text>
               </View>
               <TouchableOpacity
                 style={s.ghostBtn}
-                onPress={() => {
-                  resumeRoom(r.code, r.nick);
-                  navigation.navigate('Lobby');
+                onPress={async () => {
+                  clearError();
+                  setBusy(true);
+                  try {
+                    await resumeRoom(r);
+                  } finally {
+                    setBusy(false);
+                  }
                 }}
               >
                 <Text style={s.ghostBtnText}>Resume</Text>
@@ -75,6 +91,12 @@ export default function HomeScreen({ navigation }: NavProps<'Home'>) {
             </View>
           ))}
         </Panel>
+
+        {error ? (
+          <View style={s.errorCard}>
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+        ) : null}
       </ScrollView>
     </LinearGradient>
   );
@@ -122,4 +144,12 @@ const s = StyleSheet.create({
   recentMeta: { fontSize: 11, color: T.muted, marginTop: 1 },
   ghostBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 99, backgroundColor: 'rgba(18,42,32,0.08)' },
   ghostBtnText: { color: T.ink, fontWeight: '600', fontSize: 12 },
+  errorCard: {
+    backgroundColor: 'rgba(142,62,56,0.12)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(142,62,56,0.22)',
+    padding: 14,
+  },
+  errorText: { color: T.wine, fontWeight: '700', fontSize: 13 },
 });

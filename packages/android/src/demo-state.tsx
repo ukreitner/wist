@@ -1,125 +1,421 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
-
-export type Seat = 'N' | 'E' | 'S' | 'W';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from "react";
+import type { Socket } from "socket.io-client";
+import type { AuctionBid, Card, PrivatePlayerView, PublicMatchState, Seat, Trump } from "@wist/core";
+import {
+  bootstrapRoom,
+  buildRejoinUrl,
+  buildRoomUrl,
+  connectRoomSocket,
+  createRoom as createRemoteRoom,
+  createSessionStore,
+  getClientConfig,
+  joinRoom as joinRemoteRoom,
+  rejoinRoom as rejoinRemoteRoom,
+  type RoomSnapshot,
+  type SessionHandle,
+  type SnapshotPlayer
+} from "@wist/client";
 
 export type DemoPlayer = {
+  id: string;
   name: string;
   seat: Seat;
   connected: boolean;
   isHost?: boolean;
 };
 
-type RecentRoom = {
+type StoredRecentRoom = {
+  roomCode: string;
+  token: string;
+  nickname: string;
+  savedAt: string;
+};
+
+export type RecentRoom = {
   code: string;
   nick: string;
+  token: string;
   time: string;
+  savedAt: string;
 };
 
 type DemoStateValue = {
   roomCode: string;
   selfName: string;
-  selfSeat: Seat;
+  selfSeat: Seat | null;
+  session: SessionHandle | null;
+  snapshot: RoomSnapshot | null;
+  privateView: PrivatePlayerView | null;
+  socketState: "disconnected" | "connecting" | "connected";
+  error: string | null;
   players: DemoPlayer[];
   recentRooms: RecentRoom[];
-  createRoom: (nickname: string) => void;
-  joinRoom: (roomCode: string, nickname: string) => void;
-  resumeRoom: (roomCode: string, nickname: string) => void;
+  hand: Card[];
+  legalPassCardCodes: string[];
+  legalPlayCardCodes: string[];
+  auctionBids: AuctionBid[];
+  bettingValues: number[];
+  minimumBet: number;
+  currentTurn: Seat | null;
+  currentTrick: NonNullable<PublicMatchState["currentHand"]>["currentTrick"];
+  completedTricks: NonNullable<PublicMatchState["currentHand"]>["completedTricks"];
+  currentScores: Record<Seat, number>;
+  currentBets: Partial<Record<Seat, number>>;
+  currentTaken: Record<Seat, number>;
+  recentActions: Array<{ seat: Seat; kind: "bid" | "pass"; label: string }>;
+  recentCompletedHands: PublicMatchState["completedHands"];
+  publicAppUrl: string | null;
+  inviteUrl: string | null;
+  rejoinUrl: string | null;
+  createRoom: (nickname: string) => Promise<void>;
+  joinRoom: (roomCode: string, nickname: string) => Promise<void>;
+  resumeRoom: (room: RecentRoom) => Promise<void>;
   playerForSeat: (seat: Seat) => DemoPlayer;
   leftOfSelf: DemoPlayer;
-  contractText: string;
-  highestBidText: string;
+  contractText: string | null;
+  highestBidText: string | null;
+  clearError: () => void;
+  assignSeat: (sessionId: string, seat: Seat) => void;
+  startMatch: () => void;
+  submitPass: (cardCodes: string[]) => void;
+  submitAuctionBid: (bid: AuctionBid) => void;
+  submitAuctionPass: () => void;
+  submitBet: (value: number) => void;
+  playCard: (cardCode: string) => void;
+  requestUndo: () => void;
+  startNextHand: () => void;
+  endMatch: () => void;
 };
 
-const seatOrder: Seat[] = ['N', 'E', 'S', 'W'];
+export type { Seat } from "@wist/core";
 
-const ROOM_POOL = ['KZPQ', 'MRWV', 'TSLA', 'BJRN', 'QHTM'];
-
-const fallbackPlayers = (selfName: string, roomCode: string): DemoPlayer[] => [
-  { name: roomCode === 'KZPQ' ? 'Avi' : 'Rina', seat: 'N', connected: true, isHost: true },
-  { name: roomCode === 'KZPQ' ? 'Gila' : 'Maya', seat: 'E', connected: true },
-  { name: roomCode === 'KZPQ' ? 'Yossi' : 'Noam', seat: 'S', connected: roomCode === 'KZPQ' ? false : true },
-  { name: selfName, seat: 'W', connected: true }
-];
-
-const defaultRecentRooms: RecentRoom[] = [
-  { code: 'KZPQ', nick: 'Dani', time: 'Today, 14:32' },
-  { code: 'MRWV', nick: 'Dani', time: 'Yesterday, 21:10' }
-];
+const PROFILE_STORAGE_KEY = "wist.android.profile.v1";
+const RECENT_ROOMS_STORAGE_KEY = "wist.android.recentRooms.v1";
+const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL?.replace(/\/+$/, "") ?? "http://10.0.2.2:4100";
+const SEATS: Seat[] = ["N", "E", "S", "W"];
+const SUIT_SYMBOL: Record<Trump, string> = { C: "♣", D: "♦", H: "♥", S: "♠", NT: "NT" };
 
 const DemoStateContext = createContext<DemoStateValue | null>(null);
 
-const nextRoomCode = (taken: string[]): string => ROOM_POOL.find((code) => !taken.includes(code)) ?? `W${Date.now().toString().slice(-3)}`;
+const sessionStore = createSessionStore({
+  getItem: (key) => AsyncStorage.getItem(key),
+  setItem: (key, value) => AsyncStorage.setItem(key, value),
+  removeItem: (key) => AsyncStorage.removeItem(key)
+});
 
-const upsertRecent = (items: RecentRoom[], entry: RecentRoom): RecentRoom[] => {
-  const withoutMatch = items.filter((item) => !(item.code === entry.code && item.nick === entry.nick));
-  return [entry, ...withoutMatch].slice(0, 4);
+const readJson = async <Value,>(key: string, fallback: Value): Promise<Value> => {
+  const raw = await AsyncStorage.getItem(key);
+
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(raw) as Value;
+  } catch {
+    return fallback;
+  }
 };
 
+const writeJson = async (key: string, value: unknown): Promise<void> => {
+  await AsyncStorage.setItem(key, JSON.stringify(value));
+};
+
+const formatTimestamp = (value: string): string =>
+  new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+
+const toRecentRoom = (room: StoredRecentRoom): RecentRoom => ({
+  code: room.roomCode,
+  nick: room.nickname,
+  token: room.token,
+  time: formatTimestamp(room.savedAt),
+  savedAt: room.savedAt
+});
+
+const sortRecentRooms = (rooms: StoredRecentRoom[]): StoredRecentRoom[] =>
+  rooms.slice().sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+
+const upsertRecentRoom = async (session: SessionHandle): Promise<RecentRoom[]> => {
+  const nextRoom: StoredRecentRoom = {
+    roomCode: session.roomCode,
+    token: session.token,
+    nickname: session.nickname,
+    savedAt: new Date().toISOString()
+  };
+  const current = await readJson<StoredRecentRoom[]>(RECENT_ROOMS_STORAGE_KEY, []);
+  const nextRooms = sortRecentRooms([
+    nextRoom,
+    ...current.filter((room) => !(room.roomCode === session.roomCode && room.token === session.token))
+  ]).slice(0, 8);
+
+  await writeJson(RECENT_ROOMS_STORAGE_KEY, nextRooms);
+  return nextRooms.map(toRecentRoom);
+};
+
+const isPrivateView = (view: RoomSnapshot["view"]): view is PrivatePlayerView => "viewerSeat" in view;
+
+const nextSeat = (seat: Seat): Seat => SEATS[(SEATS.indexOf(seat) + 1) % SEATS.length]!;
+
+const fallbackPlayer = (seat: Seat): DemoPlayer => ({
+  id: `open-${seat}`,
+  name: "Open seat",
+  seat,
+  connected: false
+});
+
+const formatBid = (bid: { tricks: number; trump: Trump }): string => `${bid.tricks}${SUIT_SYMBOL[bid.trump]}`;
+
 export function DemoStateProvider({ children }: { children: ReactNode }) {
-  const [roomCode, setRoomCode] = useState('KZPQ');
-  const [selfName, setSelfName] = useState('Dani');
-  const [players, setPlayers] = useState<DemoPlayer[]>(() => fallbackPlayers('Dani', 'KZPQ'));
-  const [recentRooms, setRecentRooms] = useState<RecentRoom[]>(defaultRecentRooms);
+  const socketRef = useRef<Socket | null>(null);
+  const [session, setSession] = useState<SessionHandle | null>(null);
+  const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
+  const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
+  const [profileNickname, setProfileNickname] = useState("Dani");
+  const [socketState, setSocketState] = useState<"disconnected" | "connecting" | "connected">("disconnected");
+  const [error, setError] = useState<string | null>(null);
+  const [publicAppUrl, setPublicAppUrl] = useState<string | null>(null);
 
-  const selfSeat: Seat = 'W';
+  useEffect(() => {
+    void (async () => {
+      const [storedNickname, storedRooms] = await Promise.all([
+        AsyncStorage.getItem(PROFILE_STORAGE_KEY),
+        readJson<StoredRecentRoom[]>(RECENT_ROOMS_STORAGE_KEY, [])
+      ]);
 
-  const syncSession = (nextRoomCodeValue: string, nextName: string, options?: { isHost?: boolean }) => {
-    const trimmedName = nextName.trim() || 'Player';
-    const normalizedRoomCode = nextRoomCodeValue.trim().toUpperCase() || nextRoomCode(recentRooms.map((room) => room.code));
-    const basePlayers = fallbackPlayers(trimmedName, normalizedRoomCode).map((player) =>
-      player.seat === selfSeat ? { ...player, name: trimmedName, connected: true, isHost: options?.isHost ?? false } : player
-    );
+      if (storedNickname?.trim()) {
+        setProfileNickname(storedNickname);
+      }
 
-    if (options?.isHost) {
-      basePlayers[0] = { ...basePlayers[0], isHost: false };
-      basePlayers[3] = { ...basePlayers[3], isHost: true };
-    }
+      setRecentRooms(sortRecentRooms(storedRooms).map(toRecentRoom));
 
-    setRoomCode(normalizedRoomCode);
-    setSelfName(trimmedName);
-    setPlayers(basePlayers);
-    setRecentRooms((current) =>
-      upsertRecent(current, {
-        code: normalizedRoomCode,
-        nick: trimmedName,
-        time: 'Just now'
-      })
-    );
+      try {
+        const config = await getClientConfig({ serverUrl: SERVER_URL });
+        setPublicAppUrl(config.publicAppUrl);
+      } catch {
+        setPublicAppUrl(null);
+      }
+    })();
+
+    return () => {
+      socketRef.current?.disconnect();
+    };
+  }, []);
+
+  const rememberSession = async (nextSession: SessionHandle): Promise<void> => {
+    await Promise.all([
+      sessionStore.save(nextSession),
+      AsyncStorage.setItem(PROFILE_STORAGE_KEY, nextSession.nickname),
+      upsertRecentRoom(nextSession).then(setRecentRooms)
+    ]);
+
+    setSession(nextSession);
+    setProfileNickname(nextSession.nickname);
   };
 
-  const playerForSeat = (seat: Seat): DemoPlayer => players.find((player) => player.seat === seat) ?? { name: 'Open seat', seat, connected: false };
-  const leftOfSelf = playerForSeat('S');
-  const hostPlayer = players.find((player) => player.isHost) ?? playerForSeat('N');
-  const contractText = `6♥ by ${hostPlayer.name}`;
-  const highestBidText = `5♥ by ${hostPlayer.name}`;
+  const connectSocket = (nextSession: SessionHandle): void => {
+    socketRef.current?.disconnect();
+    socketRef.current = connectRoomSocket({
+      serverUrl: SERVER_URL,
+      session: nextSession,
+      onConnectStateChange: setSocketState,
+      onSnapshot: (nextSnapshot) => {
+        setSnapshot(nextSnapshot);
+        setError(null);
+      },
+      onPresence: (players: SnapshotPlayer[]) => {
+        setSnapshot((current) => (current ? { ...current, players } : current));
+      },
+      onError: (message) => {
+        setError(message);
+      }
+    });
+  };
 
-  return (
-    <DemoStateContext.Provider
-      value={{
-        roomCode,
-        selfName,
-        selfSeat,
-        players,
-        recentRooms,
-        createRoom: (nickname) => syncSession(nextRoomCode(recentRooms.map((room) => room.code)), nickname, { isHost: true }),
-        joinRoom: (nextCode, nickname) => syncSession(nextCode, nickname, { isHost: false }),
-        resumeRoom: (nextCode, nickname) => syncSession(nextCode, nickname, { isHost: false }),
-        playerForSeat,
-        leftOfSelf,
-        contractText,
-        highestBidText
-      }}
-    >
-      {children}
-    </DemoStateContext.Provider>
+  const createRoom = async (nickname: string): Promise<void> => {
+    try {
+      const created = await createRemoteRoom(nickname, { serverUrl: SERVER_URL });
+      await rememberSession(created.session);
+      setSnapshot(created.snapshot);
+      connectSocket(created.session);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to create room.");
+    }
+  };
+
+  const joinRoom = async (roomCode: string, nickname: string): Promise<void> => {
+    try {
+      const joined = await joinRemoteRoom(roomCode, nickname, { serverUrl: SERVER_URL });
+      await rememberSession(joined.session);
+      setSnapshot(joined.snapshot);
+      connectSocket(joined.session);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to join room.");
+    }
+  };
+
+  const resumeRoom = async (room: RecentRoom): Promise<void> => {
+    try {
+      const storedSession = (await sessionStore.load(room.code)) ?? {
+        roomCode: room.code,
+        token: room.token,
+        nickname: room.nick
+      };
+      const restored = await rejoinRemoteRoom(storedSession.roomCode, storedSession.token, { serverUrl: SERVER_URL });
+      await rememberSession(restored.session);
+      setSnapshot(restored.snapshot);
+      connectSocket(restored.session);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to resume room.");
+      try {
+        const bootstrapSnapshot = await bootstrapRoom(room.code, room.token, { serverUrl: SERVER_URL });
+        const fallbackSession = {
+          roomCode: room.code,
+          token: room.token,
+          nickname: room.nick
+        };
+
+        await rememberSession(fallbackSession);
+        setSnapshot(bootstrapSnapshot);
+        connectSocket(fallbackSession);
+        setError(null);
+      } catch {
+        /* keep original error */
+      }
+    }
+  };
+
+  const emit = (eventName: string, payload?: unknown): void => {
+    socketRef.current?.emit(eventName, payload);
+  };
+
+  const privateView = snapshot && isPrivateView(snapshot.view) ? snapshot.view : null;
+  const currentHand = snapshot?.match.currentHand ?? null;
+  const players = useMemo<DemoPlayer[]>(
+    () =>
+      snapshot?.players
+        .filter((player): player is SnapshotPlayer & { seat: Seat } => Boolean(player.seat))
+        .map((player) => ({
+          id: player.id,
+          name: player.nickname,
+          seat: player.seat,
+          connected: player.connected,
+          isHost: player.isHost
+        })) ?? [],
+    [snapshot?.players]
   );
+  const playersBySeat = useMemo(
+    () => new Map(players.map((player) => [player.seat, player] as const)),
+    [players]
+  );
+  const selfSeat = snapshot?.me.seat ?? null;
+  const leftOfSelf = selfSeat ? playersBySeat.get(nextSeat(selfSeat)) ?? fallbackPlayer(nextSeat(selfSeat)) : fallbackPlayer("N");
+  const contractText =
+    currentHand?.contract ? `${formatBid(currentHand.contract)} by ${playersBySeat.get(currentHand.contract.bidder)?.name ?? currentHand.contract.bidder}` : null;
+  const highestBidText =
+    currentHand?.highestBid && currentHand.highestBidder
+      ? `${formatBid(currentHand.highestBid)} by ${playersBySeat.get(currentHand.highestBidder)?.name ?? currentHand.highestBidder}`
+      : null;
+  const publicAppBaseUrl = publicAppUrl ?? null;
+  const inviteUrl = snapshot && publicAppBaseUrl ? buildRoomUrl(publicAppBaseUrl, snapshot.roomCode) : null;
+  const rejoinUrl =
+    snapshot && session && publicAppBaseUrl ? buildRejoinUrl(publicAppBaseUrl, snapshot.roomCode, session.token) : null;
+
+  const value = useMemo<DemoStateValue>(
+    () => ({
+      roomCode: snapshot?.roomCode ?? "",
+      selfName: snapshot?.me.nickname ?? profileNickname,
+      selfSeat,
+      session,
+      snapshot,
+      privateView,
+      socketState,
+      error,
+      players,
+      recentRooms,
+      hand: privateView?.hand ?? [],
+      legalPassCardCodes: privateView?.legalActions.passSelection?.selectableCardCodes ?? [],
+      legalPlayCardCodes: privateView?.legalActions.playing?.cardCodes ?? [],
+      auctionBids: privateView?.legalActions.auction?.bids ?? [],
+      bettingValues: privateView?.legalActions.betting?.values ?? [],
+      minimumBet: privateView?.legalActions.betting?.min ?? 0,
+      currentTurn: currentHand?.currentTurn ?? null,
+      currentTrick: currentHand?.currentTrick ?? null,
+      completedTricks: currentHand?.completedTricks ?? [],
+      currentScores: snapshot?.match.scores ?? { N: 0, E: 0, S: 0, W: 0 },
+      currentBets: currentHand?.bets ?? {},
+      currentTaken: currentHand?.taken ?? { N: 0, E: 0, S: 0, W: 0 },
+      recentActions:
+        currentHand?.auctionLog.slice(-4).map((entry: { seat: Seat; kind: "bid" | "pass"; bid?: { tricks: number; trump: Trump } }) => ({
+          seat: entry.seat,
+          kind: entry.kind,
+          label: entry.kind === "bid" && entry.bid ? formatBid(entry.bid) : "Pass"
+        })) ?? [],
+      recentCompletedHands: snapshot?.match.completedHands ?? [],
+      publicAppUrl,
+      inviteUrl,
+      rejoinUrl,
+      createRoom,
+      joinRoom,
+      resumeRoom,
+      playerForSeat: (seat) => playersBySeat.get(seat) ?? fallbackPlayer(seat),
+      leftOfSelf,
+      contractText,
+      highestBidText,
+      clearError: () => setError(null),
+      assignSeat: (sessionId, seat) => emit("seat.assign", { sessionId, seat }),
+      startMatch: () => emit("match.start"),
+      submitPass: (cardCodes) => emit("pass.submit", { cardCodes }),
+      submitAuctionBid: (bid) => emit("auction.action", { kind: "bid", bid }),
+      submitAuctionPass: () => emit("auction.action", { kind: "pass" }),
+      submitBet: (nextValue) => emit("bet.submit", { value: nextValue }),
+      playCard: (cardCode) => emit("play.card", { cardCode }),
+      requestUndo: () => emit("undo.request"),
+      startNextHand: () => emit("match.nextHand"),
+      endMatch: () => emit("match.end")
+    }),
+    [
+      contractText,
+      currentHand?.auctionLog,
+      currentHand?.bets,
+      currentHand?.completedTricks,
+      currentHand?.currentTrick,
+      currentHand?.currentTurn,
+      currentHand?.taken,
+      error,
+      inviteUrl,
+      leftOfSelf,
+      players,
+      playersBySeat,
+      privateView,
+      profileNickname,
+      publicAppUrl,
+      recentRooms,
+      rejoinUrl,
+      selfSeat,
+      session,
+      snapshot,
+      socketState,
+      highestBidText
+    ]
+  );
+
+  return <DemoStateContext.Provider value={value}>{children}</DemoStateContext.Provider>;
 }
 
 export function useDemoState(): DemoStateValue {
   const value = useContext(DemoStateContext);
 
   if (!value) {
-    throw new Error('useDemoState must be used inside DemoStateProvider.');
+    throw new Error("useDemoState must be used inside DemoStateProvider.");
   }
 
   return value;

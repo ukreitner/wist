@@ -3,105 +3,88 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
+import type { Seat } from '@wist/core';
 
-type HandRow = { id: number; bets: number[]; taken: number[]; delta: number[] };
-
-const hands: HandRow[] = [
-  { id: 1, bets: [7, 2, 2, 3], taken: [4, 1, 3, 5], delta: [-3, -1, 1, -4] },
-  { id: 2, bets: [3, 2, 2, 3], taken: [2, 1, 5, 5], delta: [1, 1, -4, -4] },
-  { id: 3, bets: [3, 2, 2, 3], taken: [3, 2, 2, 6], delta: [5, 4, 4, -6] },
-];
-const totals = [3, 4, 1, -14];
-const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+const sign = (value: number) => (value > 0 ? `+${value}` : String(value));
+const SEATS: Seat[] = ['N', 'E', 'S', 'W'];
 
 export default function ScoreScreen({ navigation }: NavProps<'Score'>) {
-  const lastHand = hands[hands.length - 1];
-  const { playerForSeat } = useDemoState();
-  const players = [playerForSeat('N').name, playerForSeat('E').name, playerForSeat('W').name, playerForSeat('S').name];
+  const { playerForSeat, snapshot, recentCompletedHands, currentScores, startNextHand, endMatch, error, clearError } = useDemoState();
+  const lastHand = recentCompletedHands[recentCompletedHands.length - 1] ?? null;
+
+  if (!snapshot || !lastHand) {
+    return (
+      <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
+        <View style={s.emptyState}>
+          <Text style={s.title}>Waiting for scorecard…</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  const players = SEATS.map((seat) => ({
+    seat,
+    name: playerForSeat(seat).name,
+    total: currentScores[seat]
+  }));
 
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
       <ScrollView contentContainerStyle={{ paddingTop: 46, paddingBottom: 28, gap: 10 }} showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={{ paddingHorizontal: 16 }}>
           <Text style={s.eyebrow}>Hand {lastHand.id} Complete</Text>
           <Text style={s.title}>Scorecard</Text>
         </View>
 
-        {/* Hand deltas */}
         <View style={s.deltasCard}>
-          <Text style={s.deltasLabel}>Hand {lastHand.id} · 6♥ by {playerForSeat('N').name}</Text>
+          <Text style={s.deltasLabel}>Hand {lastHand.id} · {lastHand.contract.tricks}{lastHand.contract.trump} by {playerForSeat(lastHand.contract.bidder).name}</Text>
           <View style={s.deltasGrid}>
-            {players.map((p, i) => {
-              const d = lastHand.delta[i];
-              const positive = d > 0;
-              const negative = d < 0;
+            {players.map((player) => {
+              const delta = lastHand.scoreDelta[player.seat];
+              const positive = delta > 0;
+              const negative = delta < 0;
               return (
-                <View
-                  key={p}
-                  style={[
-                    s.deltaCell,
-                    positive && s.deltaPos,
-                    negative && s.deltaNeg,
-                  ]}
-                >
-                  <Text style={s.deltaName} numberOfLines={1}>{p}</Text>
-                  <Text
-                    style={[
-                      s.deltaValue,
-                      { color: positive ? '#7acea8' : negative ? '#e4786e' : 'rgba(246,231,201,0.8)' },
-                    ]}
-                  >
-                    {sign(d)}
-                  </Text>
-                  <Text style={s.deltaMeta}>B:{lastHand.bets[i]} W:{lastHand.taken[i]}</Text>
+                <View key={player.seat} style={[s.deltaCell, positive && s.deltaPos, negative && s.deltaNeg]}>
+                  <Text style={s.deltaName} numberOfLines={1}>{player.name}</Text>
+                  <Text style={[s.deltaValue, { color: positive ? '#7acea8' : negative ? '#e4786e' : 'rgba(246,231,201,0.8)' }]}>{sign(delta)}</Text>
+                  <Text style={s.deltaMeta}>B:{lastHand.bets[player.seat]} W:{lastHand.taken[player.seat]}</Text>
                 </View>
               );
             })}
           </View>
         </View>
 
-        {/* Score table */}
         <View style={s.panel}>
           <Text style={s.panelEyebrow}>Score Table</Text>
-
-          {/* Header row */}
           <View style={s.tableHeader}>
             <View style={s.colNarrow} />
-            {players.map((p) => (
-              <View key={p} style={s.colFlex}>
-                <Text style={s.colHeaderText} numberOfLines={1}>{p}</Text>
+            {players.map((player) => (
+              <View key={player.seat} style={s.colFlex}>
+                <Text style={s.colHeaderText} numberOfLines={1}>{player.name}</Text>
               </View>
             ))}
           </View>
 
-          {/* Totals row */}
           <View style={s.totalsRow}>
             <View style={[s.colNarrow, s.totalsCell]}>
               <Text style={s.totalsLabel}>Total</Text>
             </View>
-            {totals.map((t, i) => (
-              <View key={i} style={[s.colFlex, s.totalsCell]}>
-                <Text style={s.totalsValue}>{t}</Text>
+            {players.map((player) => (
+              <View key={`${player.seat}-total`} style={[s.colFlex, s.totalsCell]}>
+                <Text style={s.totalsValue}>{player.total}</Text>
               </View>
             ))}
           </View>
 
-          {/* Per-hand rows, newest first */}
-          {hands.slice().reverse().map((h) => (
-            <View key={h.id} style={s.handRow}>
+          {recentCompletedHands.slice().reverse().map((hand: typeof recentCompletedHands[number]) => (
+            <View key={hand.id} style={s.handRow}>
               <View style={[s.colNarrow, s.handCell]}>
-                <Text style={s.handLabel}>H{h.id}</Text>
+                <Text style={s.handLabel}>H{hand.id}</Text>
               </View>
-              {h.delta.map((d, i) => (
-                <View key={i} style={[s.colFlex, s.handCell]}>
-                  <Text
-                    style={[
-                      s.handDelta,
-                      { color: d > 0 ? T.success : d < 0 ? T.wine : T.ink },
-                    ]}
-                  >
-                    {sign(d)}
+              {SEATS.map((seat) => (
+                <View key={`${hand.id}-${seat}`} style={[s.colFlex, s.handCell]}>
+                  <Text style={[s.handDelta, { color: hand.scoreDelta[seat] > 0 ? T.success : hand.scoreDelta[seat] < 0 ? T.wine : T.ink }]}>
+                    {sign(hand.scoreDelta[seat])}
                   </Text>
                 </View>
               ))}
@@ -109,21 +92,22 @@ export default function ScoreScreen({ navigation }: NavProps<'Score'>) {
           ))}
         </View>
 
-        {/* Actions */}
         <View style={{ paddingHorizontal: 14, gap: 8 }}>
           <TouchableOpacity
             testID="cta-deal-next"
-            style={s.cta}
-            onPress={() => navigation.navigate('Auction')}
+            style={[s.cta, !snapshot.controls.canStartNextHand && s.ctaDisabled]}
+            onPress={() => {
+              clearError();
+              startNextHand();
+            }}
+            disabled={!snapshot.controls.canStartNextHand}
           >
             <Text style={s.ctaText}>Deal Next Hand</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.ctaGhost}>
-            <Text style={s.ctaGhostText}>View Full History</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.ctaEnd}>
+          <TouchableOpacity style={[s.ctaEnd, !snapshot.controls.canEndMatch && s.ctaDisabled]} onPress={() => endMatch()} disabled={!snapshot.controls.canEndMatch}>
             <Text style={s.ctaEndText}>End Match</Text>
           </TouchableOpacity>
+          {error ? <Text style={s.errorText}>{error}</Text> : null}
         </View>
       </ScrollView>
     </LinearGradient>
@@ -132,6 +116,7 @@ export default function ScoreScreen({ navigation }: NavProps<'Score'>) {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   eyebrow: { fontSize: 10, color: 'rgba(246,231,201,0.6)', letterSpacing: 1.2, textTransform: 'uppercase' },
   title: { fontFamily: T.serif, fontSize: 26, color: '#f6e7c9', marginTop: 4 },
   deltasCard: {
@@ -202,9 +187,9 @@ const s = StyleSheet.create({
   handLabel: { fontSize: 11, color: T.ink },
   handDelta: { fontSize: 11, fontWeight: '700' },
   cta: { paddingVertical: 13, borderRadius: 99, backgroundColor: T.gold, alignItems: 'center' },
+  ctaDisabled: { opacity: 0.45 },
   ctaText: { color: '#1c2024', fontWeight: '700', fontSize: 14 },
-  ctaGhost: { paddingVertical: 13, borderRadius: 99, backgroundColor: 'rgba(18,42,32,0.08)', alignItems: 'center' },
-  ctaGhostText: { color: T.ink, fontWeight: '700', fontSize: 14 },
   ctaEnd: { paddingVertical: 13, borderRadius: 99, backgroundColor: 'rgba(142,62,56,0.1)', alignItems: 'center' },
   ctaEndText: { color: T.wine, fontWeight: '700', fontSize: 14 },
+  errorText: { color: T.wine, fontWeight: '700', fontSize: 12, textAlign: 'center' },
 });

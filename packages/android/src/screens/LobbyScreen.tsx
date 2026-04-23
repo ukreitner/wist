@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import type { NavProps } from '../nav';
@@ -14,8 +14,15 @@ function SeatBox({ seat, name }: { seat: Seat; name: string }) {
 }
 
 export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
-  const { roomCode, players, playerForSeat } = useDemoState();
-  const connectedCount = players.filter((player) => player.connected).length;
+  const { roomCode, players, playerForSeat, snapshot, startMatch, assignSeat, inviteUrl, rejoinUrl, error, clearError } = useDemoState();
+  const connectedCount = snapshot?.players.filter((player) => player.connected).length ?? 0;
+  const seatedCount = players.length;
+
+  const shareText = async (value: string | null, fallback: string) => {
+    await Share.share({
+      message: value ?? fallback
+    });
+  };
 
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
@@ -43,7 +50,7 @@ export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
             <SeatBox seat="W" name={playerForSeat('W').name} />
             <View style={s.center}>
               <Text style={s.centerCode}>{roomCode}</Text>
-              <Text style={s.centerMeta}>4 / 4 seated</Text>
+              <Text style={s.centerMeta}>{seatedCount} / 4 seated</Text>
             </View>
             <SeatBox seat="E" name={playerForSeat('E').name} />
           </View>
@@ -58,20 +65,29 @@ export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
         <View style={s.panel}>
           <Text style={s.panelEyebrow}>Players</Text>
           <View style={{ gap: 8, marginTop: 10 }}>
-            {players.map((p) => (
-              <View key={p.name} style={s.playerRow}>
+            {snapshot?.players.map((p) => (
+              <View key={p.id} style={s.playerRow}>
                 <LinearGradient colors={['#20553e', '#112b21']} style={s.avatar}>
-                  <Text style={s.avatarText}>{p.name[0]}</Text>
+                  <Text style={s.avatarText}>{p.nickname[0]}</Text>
                 </LinearGradient>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.playerName}>{p.name}{p.isHost ? ' 👑' : ''}</Text>
-                  <Text style={s.playerSeat}>Seat {p.seat}</Text>
+                  <Text style={s.playerName}>{p.nickname}{p.isHost ? ' 👑' : ''}</Text>
+                  <Text style={s.playerSeat}>{p.seat ? `Seat ${p.seat}` : 'Unseated'}</Text>
                 </View>
                 <View style={[s.statusTag, p.connected ? s.statusOnline : s.statusOffline]}>
                   <Text style={[s.statusTagText, { color: p.connected ? T.success : T.wine }]}>
                     {p.connected ? 'Online' : 'Away'}
                   </Text>
                 </View>
+                {snapshot?.controls.canAssignSeats ? (
+                  <View style={s.seatActions}>
+                    {(['N', 'E', 'S', 'W'] as Seat[]).map((seat) => (
+                      <TouchableOpacity key={`${p.id}-${seat}`} style={s.seatBtn} onPress={() => assignSeat(p.id, seat)}>
+                        <Text style={s.seatBtnText}>{seat}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             ))}
           </View>
@@ -79,15 +95,24 @@ export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
 
         {/* Actions */}
         <View style={{ gap: 8, marginTop: 4 }}>
-          <TouchableOpacity style={s.cta} onPress={() => navigation.navigate('PassCards')} testID="cta-start-match">
+          <TouchableOpacity
+            style={[s.cta, !snapshot?.controls.canStartMatch && s.ctaDisabled]}
+            onPress={() => {
+              clearError();
+              startMatch();
+            }}
+            disabled={!snapshot?.controls.canStartMatch}
+            testID="cta-start-match"
+          >
             <Text style={s.ctaText}>Start Match</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.ghost}>
-            <Text style={s.ghostText}>Copy Invite Link</Text>
+          <TouchableOpacity style={s.ghost} onPress={() => void shareText(inviteUrl, roomCode)}>
+            <Text style={s.ghostText}>Share Invite Link</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.ghost}>
-            <Text style={s.ghostText}>Copy Rejoin Link</Text>
+          <TouchableOpacity style={s.ghost} onPress={() => void shareText(rejoinUrl, roomCode)}>
+            <Text style={s.ghostText}>Share Rejoin Link</Text>
           </TouchableOpacity>
+          {error ? <Text style={s.errorText}>{error}</Text> : null}
         </View>
       </ScrollView>
     </LinearGradient>
@@ -167,12 +192,22 @@ const s = StyleSheet.create({
   statusOnline: { backgroundColor: 'rgba(37,93,66,0.14)' },
   statusOffline: { backgroundColor: 'rgba(142,62,56,0.12)' },
   statusTagText: { fontSize: 10, fontWeight: '800' },
+  seatActions: { width: '100%', flexDirection: 'row', gap: 4, marginTop: 8 },
+  seatBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 99,
+    backgroundColor: 'rgba(18,42,32,0.08)',
+    alignItems: 'center',
+  },
+  seatBtnText: { color: T.ink, fontWeight: '700', fontSize: 11 },
   cta: {
     paddingVertical: 13,
     borderRadius: 99,
     backgroundColor: T.gold,
     alignItems: 'center',
   },
+  ctaDisabled: { opacity: 0.45 },
   ctaText: { color: '#1c2024', fontWeight: '700', fontSize: 14 },
   ghost: {
     paddingVertical: 11,
@@ -181,4 +216,5 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   ghostText: { color: T.ink, fontWeight: '600', fontSize: 13 },
+  errorText: { color: '#f1a39c', fontWeight: '700', fontSize: 12, textAlign: 'center' },
 });

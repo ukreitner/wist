@@ -11,19 +11,24 @@ import type { RoomSnapshot } from "./types.js";
 export interface AppServerConfig {
   port?: number;
   dbPath?: string;
+  databaseUrl?: string;
   origin?: string;
   staticDir?: string;
+  publicAppUrl?: string;
   roomTtlMs?: number;
   hostTransferGraceMs?: number;
   allowTestPresets?: boolean;
+  store?: Parameters<typeof RoomManager.create>[0]["store"];
 }
 
 export const createAppServer = async (config: AppServerConfig = {}) => {
   const roomManager = await RoomManager.create({
     dbPath: config.dbPath ?? ".data/wist.sqlite",
+    databaseUrl: config.databaseUrl ?? process.env.DATABASE_URL,
     roomTtlMs: config.roomTtlMs ?? 24 * 60 * 60 * 1000,
     allowTestPresets: config.allowTestPresets ?? process.env.ALLOW_TEST_PRESETS === "1",
-    testPresets: TEST_PRESETS
+    testPresets: TEST_PRESETS,
+    store: config.store
   });
   const app = express();
   const httpServer = http.createServer(app);
@@ -77,12 +82,14 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
   const scheduleHostTransfer = (roomCode: string): void => {
     clearTransferTimer(roomCode);
     const timer = setTimeout(() => {
-      try {
-        roomManager.transferHost(roomCode);
-        pushRoomSnapshot(roomCode);
-      } catch {
-        hostTransferTimers.delete(roomCode);
-      }
+      void (async () => {
+        try {
+          await roomManager.transferHost(roomCode);
+          pushRoomSnapshot(roomCode);
+        } catch {
+          hostTransferTimers.delete(roomCode);
+        }
+      })();
     }, config.hostTransferGraceMs ?? 30_000);
 
     hostTransferTimers.set(roomCode, timer);
@@ -92,6 +99,7 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
   app.use(express.json());
 
   const configuredStaticDir = config.staticDir ?? process.env.WIST_STATIC_DIR;
+  const publicAppUrl = config.publicAppUrl ?? process.env.PUBLIC_APP_URL ?? null;
   const staticDir = configuredStaticDir
     ? path.resolve(configuredStaticDir)
     : path.resolve(process.cwd(), "packages/web/dist");
@@ -100,10 +108,16 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
     response.json({ ok: true });
   });
 
-  app.post("/api/rooms", (request, response) => {
+  app.get("/api/config", (_request, response) => {
+    response.json({
+      publicAppUrl
+    });
+  });
+
+  app.post("/api/rooms", async (request, response) => {
     try {
       const { nickname, testPresetKey } = request.body as { nickname?: string; testPresetKey?: string };
-      const { room, session } = roomManager.createRoom(nickname ?? "", testPresetKey);
+      const { room, session } = await roomManager.createRoom(nickname ?? "", testPresetKey);
 
       response.status(201).json({
         roomCode: room.code,
@@ -115,10 +129,10 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
     }
   });
 
-  app.post("/api/rooms/:code/join", (request, response) => {
+  app.post("/api/rooms/:code/join", async (request, response) => {
     try {
       const { nickname } = request.body as { nickname?: string };
-      const { room, session } = roomManager.joinRoom(request.params.code, nickname ?? "");
+      const { room, session } = await roomManager.joinRoom(request.params.code, nickname ?? "");
 
       response.status(201).json({
         roomCode: room.code,
@@ -184,57 +198,59 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
     const roomCode = auth.roomCode.toUpperCase();
     const token = auth.token;
 
-    try {
-      const previousSocketId = socketIdsByToken.get(token);
-
-      if (previousSocketId && previousSocketId !== socket.id) {
-        io.sockets.sockets.get(previousSocketId)?.disconnect(true);
-      }
-
-      socketIdsByToken.set(token, socket.id);
-      socket.join(roomCode);
-      clearTransferTimer(roomCode);
-      roomManager.setSessionConnected(token, true);
-      socket.emit("snapshot", roomManager.buildSnapshot(roomCode, token));
-      io.to(roomCode).emit("presence", buildPresence(roomCode));
-    } catch (error) {
-      emitError(socket.id, error);
-      socket.disconnect(true);
-      return;
-    }
-
-    const guarded = <Payload>(handler: (payload: Payload) => void) => (payload: Payload): void => {
+    void (async () => {
       try {
-        handler(payload);
-        pushRoomSnapshot(roomCode);
+        const previousSocketId = socketIdsByToken.get(token);
+
+        if (previousSocketId && previousSocketId !== socket.id) {
+          io.sockets.sockets.get(previousSocketId)?.disconnect(true);
+        }
+
+        socketIdsByToken.set(token, socket.id);
+        socket.join(roomCode);
+        clearTransferTimer(roomCode);
+        await roomManager.setSessionConnected(token, true);
+        socket.emit("snapshot", roomManager.buildSnapshot(roomCode, token));
+        io.to(roomCode).emit("presence", buildPresence(roomCode));
       } catch (error) {
         emitError(socket.id, error);
+        socket.disconnect(true);
       }
+    })();
+
+    const guarded = <Payload>(handler: (payload: Payload) => Promise<void> | void) => (payload: Payload): void => {
+      void Promise.resolve(handler(payload))
+        .then(() => {
+          pushRoomSnapshot(roomCode);
+        })
+        .catch((error) => {
+          emitError(socket.id, error);
+        });
     };
 
     socket.on(
       "seat.assign",
-      guarded<{ sessionId: string; seat: "N" | "E" | "S" | "W" }>(({ sessionId, seat }) => {
-        roomManager.assignSeat(token, sessionId, seat);
+      guarded<{ sessionId: string; seat: "N" | "E" | "S" | "W" }>(async ({ sessionId, seat }) => {
+        await roomManager.assignSeat(token, sessionId, seat);
       })
     );
 
-    socket.on("match.start", guarded<void>(() => {
-      roomManager.startMatch(token);
+    socket.on("match.start", guarded<void>(async () => {
+      await roomManager.startMatch(token);
     }));
 
-    socket.on("match.nextHand", guarded<void>(() => {
-      roomManager.startNextHand(token);
+    socket.on("match.nextHand", guarded<void>(async () => {
+      await roomManager.startNextHand(token);
     }));
 
-    socket.on("match.end", guarded<void>(() => {
-      roomManager.endMatch(token);
+    socket.on("match.end", guarded<void>(async () => {
+      await roomManager.endMatch(token);
     }));
 
     socket.on(
       "pass.submit",
-      guarded<{ cardCodes: string[] }>(({ cardCodes }) => {
-        const { appended } = roomManager.appendGameEvent(token, {
+      guarded<{ cardCodes: string[] }>(async ({ cardCodes }) => {
+        const { appended } = await roomManager.appendGameEvent(token, {
           type: "pass.selected",
           cardCodes
         });
@@ -245,11 +261,11 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
     socket.on(
       "auction.action",
       guarded<{ kind: "pass" | "bid"; bid?: { tricks: number; trump: "C" | "D" | "H" | "S" | "NT" } }>(
-        ({ kind, bid }) => {
+        async ({ kind, bid }) => {
           const { appended } =
             kind === "pass"
-              ? roomManager.appendGameEvent(token, { type: "auction.pass" })
-              : roomManager.appendGameEvent(token, {
+              ? await roomManager.appendGameEvent(token, { type: "auction.pass" })
+              : await roomManager.appendGameEvent(token, {
                   type: "auction.bid",
                   bid: {
                     tricks: bid?.tricks ?? 0,
@@ -263,8 +279,8 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
 
     socket.on(
       "bet.submit",
-      guarded<{ value: number }>(({ value }) => {
-        const { appended } = roomManager.appendGameEvent(token, {
+      guarded<{ value: number }>(async ({ value }) => {
+        const { appended } = await roomManager.appendGameEvent(token, {
           type: "bet.submitted",
           value
         });
@@ -274,8 +290,8 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
 
     socket.on(
       "play.card",
-      guarded<{ cardCode: string }>(({ cardCode }) => {
-        const { appended } = roomManager.appendGameEvent(token, {
+      guarded<{ cardCode: string }>(async ({ cardCode }) => {
+        const { appended } = await roomManager.appendGameEvent(token, {
           type: "card.played",
           cardCode
         });
@@ -283,40 +299,51 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
       })
     );
 
-    socket.on("undo.request", guarded<void>(() => {
-      const { appended } = roomManager.requestUndo(token);
+    socket.on("undo.request", guarded<void>(async () => {
+      const { appended } = await roomManager.requestUndo(token);
       io.to(roomCode).emit("event.appended", { id: appended.id, type: appended.type });
     }));
 
-    socket.on("leave", guarded<void>(() => {
-      const room = roomManager.leaveRoom(token);
+    socket.on("leave", () => {
+      void (async () => {
+        try {
+          const room = await roomManager.leaveRoom(token);
 
-      if (!room) {
-        io.to(roomCode).emit("presence", []);
-        return;
-      }
-    }));
+          if (!room) {
+            io.to(roomCode).emit("presence", []);
+            return;
+          }
+
+          pushRoomSnapshot(roomCode);
+        } catch (error) {
+          emitError(socket.id, error);
+        }
+      })();
+    });
 
     socket.on("disconnect", () => {
       socketIdsByToken.delete(token);
 
-      try {
-        const room = roomManager.setSessionConnected(token, false);
+      void (async () => {
+        try {
+          const room = await roomManager.setSessionConnected(token, false);
 
-        if (room.hostSessionId === room.sessions.find((session) => session.token === token)?.id) {
-          scheduleHostTransfer(roomCode);
+          if (room.hostSessionId === room.sessions.find((session) => session.token === token)?.id) {
+            scheduleHostTransfer(roomCode);
+          }
+
+          io.to(roomCode).emit("presence", buildPresence(roomCode));
+          pushRoomSnapshot(roomCode);
+        } catch {
+          clearTransferTimer(roomCode);
         }
-
-        io.to(roomCode).emit("presence", buildPresence(roomCode));
-        pushRoomSnapshot(roomCode);
-      } catch {
-        clearTransferTimer(roomCode);
-      }
+      })();
     });
   });
 
   const close = async (): Promise<void> => {
     await io.close();
+    await roomManager.close();
     if (!httpServer.listening) {
       return;
     }

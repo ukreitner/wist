@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
@@ -6,57 +6,70 @@ import { GameHeader } from '../components/GameHeader';
 import { FeltTable } from '../components/FeltTable';
 import { SeatChip } from '../components/SeatChip';
 import { ChipBtn } from '../components/ChipBtn';
-import { WistCard } from '../components/WistCard';
+import { HandFan } from '../components/HandFan';
 import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
+import type { Trump, Seat } from '@wist/core';
 
-type Suit = 'C' | 'D' | 'H' | 'S' | 'NT';
-type AuctionSeat = {
-  name: string;
-  seat: 'N' | 'E' | 'S' | 'W';
-  action: string;
-  isHighest?: boolean;
-  isTurn?: boolean;
-};
-
-const SUIT_SYM_NT: Record<Suit, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
+const SUIT_SYM: Record<Trump, string> = { C: '♣', D: '♦', H: '♥', S: '♠', NT: 'NT' };
 
 export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
-  const [selTrump, setSelTrump] = useState<Suit>('H');
-  const [selTricks, setSelTricks] = useState(6);
-  const { playerForSeat, selfName, highestBidText } = useDemoState();
+  const [selectedTrump, setSelectedTrump] = useState<Trump | null>(null);
+  const [selectedTricks, setSelectedTricks] = useState<number | null>(null);
+  const { playerForSeat, selfName, highestBidText, hand, legalPlayCardCodes, auctionBids, currentTurn, recentActions, submitAuctionBid, submitAuctionPass, error, clearError } = useDemoState();
 
-  const suits: Suit[] = ['C', 'D', 'H', 'S', 'NT'];
-  const numbers = [6, 7, 8, 9, 10, 11, 12, 13];
-  const seats: AuctionSeat[] = [
-    { name: playerForSeat('N').name, seat: 'N', action: '5♥', isHighest: true },
-    { name: playerForSeat('E').name, seat: 'E', action: 'Pass' },
-    { name: playerForSeat('S').name, seat: 'S', action: '5♠' },
-    { name: playerForSeat('W').name, seat: 'W', action: '—', isTurn: true }
-  ];
+  const trumps = useMemo(
+    () => Array.from(new Set(auctionBids.map((bid) => bid.trump))),
+    [auctionBids]
+  );
+  const activeTrump = selectedTrump && trumps.includes(selectedTrump) ? selectedTrump : trumps[0] ?? null;
+  const tricks = useMemo(
+    () =>
+      activeTrump
+        ? Array.from(new Set(auctionBids.filter((bid) => bid.trump === activeTrump).map((bid) => bid.tricks))).sort((left, right) => left - right)
+        : [],
+    [activeTrump, auctionBids]
+  );
+  const activeTricks = selectedTricks && tricks.includes(selectedTricks) ? selectedTricks : tricks[0] ?? null;
+  const selectedBid = activeTrump && activeTricks ? auctionBids.find((bid) => bid.trump === activeTrump && bid.tricks === activeTricks) ?? null : null;
+  const actionBySeat = new Map<Seat, string>();
+
+  recentActions.forEach((action) => {
+    actionBySeat.set(action.seat, action.label);
+  });
+
+  useEffect(() => {
+    if (activeTrump !== selectedTrump) {
+      setSelectedTrump(activeTrump);
+    }
+  }, [activeTrump, selectedTrump]);
+
+  useEffect(() => {
+    if (activeTricks !== selectedTricks) {
+      setSelectedTricks(activeTricks);
+    }
+  }, [activeTricks, selectedTricks]);
+
+  const seats: Array<{ seat: Seat; name: string; action: string; isTurn: boolean; isHighest: boolean }> = (['N', 'E', 'S', 'W'] as Seat[]).map((seat) => ({
+    seat,
+    name: playerForSeat(seat).name,
+    action: actionBySeat.get(seat) ?? '—',
+    isTurn: currentTurn === seat,
+    isHighest: Boolean(highestBidText && actionBySeat.get(seat) && highestBidText.startsWith(actionBySeat.get(seat)!))
+  }));
 
   const AuctionCenter = (
     <View style={s.centerWrap}>
       <View style={s.centerTop}>
         <Text style={s.centerEyebrow}>Current highest</Text>
-        <Text style={s.centerBid}>
-          5<Text style={{ color: '#e84040' }}>♥</Text>
-        </Text>
-        <Text style={s.centerBy}>by {highestBidText.split(' by ')[1]}</Text>
+        <Text style={s.centerBid}>{highestBidText ?? 'No bid yet'}</Text>
       </View>
       <View style={s.centerGrid}>
-        {seats.map((st) => (
-          <View
-            key={st.seat}
-            style={[
-              s.centerCell,
-              st.isHighest && s.centerCellHighest,
-              st.isTurn && s.centerCellTurn,
-            ]}
-          >
-            <Text style={s.centerCellSeat}>{st.isTurn ? '▶ YOU' : st.seat}</Text>
-            <Text style={s.centerCellName} numberOfLines={1}>{st.name}</Text>
-            <Text style={s.centerCellAction}>{st.action}</Text>
+        {seats.map((entry) => (
+          <View key={entry.seat} style={[s.centerCell, entry.isHighest && s.centerCellHighest, entry.isTurn && s.centerCellTurn]}>
+            <Text style={s.centerCellSeat}>{entry.isTurn ? '▶ TURN' : entry.seat}</Text>
+            <Text style={s.centerCellName} numberOfLines={1}>{entry.name}</Text>
+            <Text style={s.centerCellAction}>{entry.action}</Text>
           </View>
         ))}
       </View>
@@ -66,47 +79,41 @@ export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
   return (
     <LinearGradient colors={[T.bgStart, T.bgMid, T.bgEnd]} style={s.root}>
       <ScrollView contentContainerStyle={{ paddingTop: 40, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <GameHeader hand="Hand 1" phase="Auction" />
+        <GameHeader hand="Current Hand" phase="Auction" />
         <FeltTable
-          north={<SeatChip name={playerForSeat('N').name} />}
-          west={<SeatChip name={playerForSeat('W').name} isTurn />}
-          east={<SeatChip name={playerForSeat('E').name} />}
-          south={<SeatChip name={playerForSeat('S').name} />}
+          north={<SeatChip name={playerForSeat('N').name} isTurn={currentTurn === 'N'} connected={playerForSeat('N').connected} />}
+          west={<SeatChip name={playerForSeat('W').name} isTurn={currentTurn === 'W'} connected={playerForSeat('W').connected} />}
+          east={<SeatChip name={playerForSeat('E').name} isTurn={currentTurn === 'E'} connected={playerForSeat('E').connected} />}
+          south={<SeatChip name={playerForSeat('S').name} isTurn={currentTurn === 'S'} connected={playerForSeat('S').connected} />}
           center={AuctionCenter}
           centerH={200}
         />
 
-        {/* Face-down hand */}
         <View style={s.handWrap}>
-          <Text style={s.handLabel}>Your Hand · {selfName} (West) — auction in progress</Text>
-          <View style={s.handRow}>
-            {Array.from({ length: 13 }).map((_, i) => (
-              <View key={i} style={{ marginLeft: i === 0 ? 0 : -38, zIndex: i, elevation: i }}>
-                <WistCard rank={2} suit="C" width={54} faceDown />
-              </View>
-            ))}
-          </View>
+          <Text style={s.handLabel}>Your Hand · {selfName}</Text>
+          <HandFan cards={hand} playable={new Set(legalPlayCardCodes)} />
         </View>
 
-        {/* Action panel */}
         <View style={s.panel}>
           <View style={s.panelHeader}>
             <Text style={s.panelTitle}>Your Bid</Text>
-            <View style={s.bidPill}>
-              <Text style={s.bidPillText}>{selTricks}{SUIT_SYM_NT[selTrump]}</Text>
-            </View>
+            {selectedBid ? (
+              <View style={s.bidPill}>
+                <Text style={s.bidPillText}>{selectedBid.tricks}{SUIT_SYM[selectedBid.trump]}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View>
             <Text style={s.miniLabel}>Suit</Text>
             <View style={s.grid5}>
-              {suits.map((st) => (
+              {trumps.map((trump) => (
                 <ChipBtn
-                  key={st}
-                  label={SUIT_SYM_NT[st]}
-                  selected={selTrump === st}
-                  onPress={() => setSelTrump(st)}
-                  testID={`suit-${st}`}
+                  key={trump}
+                  label={SUIT_SYM[trump]}
+                  selected={selectedTrump === trump}
+                  onPress={() => setSelectedTrump(trump)}
+                  testID={`auction-trump-${trump}`}
                 />
               ))}
             </View>
@@ -115,30 +122,36 @@ export default function AuctionScreen({ navigation }: NavProps<'Auction'>) {
           <View>
             <Text style={s.miniLabel}>Number of tricks</Text>
             <View style={s.grid8}>
-              {numbers.map((n) => (
+              {tricks.map((trickCount) => (
                 <ChipBtn
-                  key={n}
-                  label={n}
-                  selected={selTricks === n}
-                  onPress={() => setSelTricks(n)}
-                  testID={`tricks-${n}`}
+                  key={trickCount}
+                  label={trickCount}
+                  selected={selectedTricks === trickCount}
+                  onPress={() => setSelectedTricks(trickCount)}
+                  testID={`auction-tricks-${trickCount}`}
                 />
               ))}
             </View>
           </View>
 
           <View style={s.actionRow}>
-            <TouchableOpacity style={s.passBtn}>
+            <TouchableOpacity style={s.passBtn} onPress={() => { clearError(); submitAuctionPass(); }}>
               <Text style={s.passText}>Pass</Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="cta-bid"
-              style={s.bidBtn}
-              onPress={() => navigation.navigate('Betting')}
+              style={[s.bidBtn, !selectedBid && s.bidBtnDisabled]}
+              disabled={!selectedBid}
+              onPress={() => {
+                if (!selectedBid) return;
+                clearError();
+                submitAuctionBid(selectedBid);
+              }}
             >
-              <Text style={s.bidBtnText}>Bid {selTricks}{SUIT_SYM_NT[selTrump]} →</Text>
+              <Text style={s.bidBtnText}>{selectedBid ? `Bid ${selectedBid.tricks}${SUIT_SYM[selectedBid.trump]}` : 'Select a bid'}</Text>
             </TouchableOpacity>
           </View>
+          {error ? <Text style={s.errorText}>{error}</Text> : null}
         </View>
       </ScrollView>
     </LinearGradient>
@@ -166,14 +179,8 @@ const s = StyleSheet.create({
     color: 'rgba(250,237,207,0.65)',
     marginBottom: 3,
   },
-  centerBid: { fontFamily: T.serif, fontSize: 22, color: '#faedcf' },
-  centerBy: { fontSize: 10, color: 'rgba(250,237,207,0.65)', marginTop: 2 },
-  centerGrid: {
-    width: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-  },
+  centerBid: { fontFamily: T.serif, fontSize: 18, color: '#faedcf', textAlign: 'center' },
+  centerGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   centerCell: {
     width: '48%',
     padding: 6,
@@ -216,7 +223,6 @@ const s = StyleSheet.create({
     color: 'rgba(246,231,201,0.45)',
     marginBottom: 8,
   },
-  handRow: { flexDirection: 'row', alignItems: 'flex-end' },
   panel: {
     marginTop: 10,
     marginHorizontal: 12,
@@ -245,7 +251,7 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   grid5: { flexDirection: 'row', gap: 5 },
-  grid8: { flexDirection: 'row', gap: 4 },
+  grid8: { flexDirection: 'row', gap: 4, flexWrap: 'wrap' },
   actionRow: { flexDirection: 'row', gap: 8 },
   passBtn: {
     flex: 1,
@@ -262,5 +268,7 @@ const s = StyleSheet.create({
     backgroundColor: T.gold,
     alignItems: 'center',
   },
+  bidBtnDisabled: { opacity: 0.45 },
   bidBtnText: { color: '#1c2024', fontWeight: '700', fontSize: 14 },
+  errorText: { color: T.wine, fontWeight: '700', fontSize: 12, textAlign: 'center' },
 });

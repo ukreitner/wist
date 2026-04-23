@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "tsc --project tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
-    "preview:test": "npm.cmd run build && vite preview --host 127.0.0.1 --port 4173",
+    "preview:test": "npm run build && vite preview --host 127.0.0.1 --port 4173",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@wist/client": "0.1.0",
     "@wist/core": "0.1.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

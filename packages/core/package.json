@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
-    "test": "npm.cmd run build && node test/run.mjs",
+    "test": "npm run build && node test/run.mjs",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "devDependencies": {
