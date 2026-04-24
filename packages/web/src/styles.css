@@ -418,6 +418,75 @@ input::placeholder {
   gap: 12px;
 }
 
+.room-tools-panel--quiet {
+  padding: 16px;
+}
+
+.room-tools-menu {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.room-tools-menu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 4px 2px;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.room-tools-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.room-tools-menu > summary::after {
+  content: "⋯";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(18, 42, 32, 0.08);
+  color: var(--gold-deep);
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.room-tools-menu[open] > summary::after {
+  content: "×";
+  font-size: 1.1rem;
+}
+
+.room-tools-menu > summary .panel-kicker {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.room-tools-menu > summary strong {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+}
+
+.room-tools-menu[open] {
+  display: grid;
+}
+
+.room-tools-menu[open] > :not(summary) {
+  margin-top: 0;
+}
+
+.lobby-tools-menu {
+  padding-top: 4px;
+  border-top: 1px solid rgba(111, 80, 42, 0.12);
+}
+
 .player-row__labels,
 .hand-panel__meta,
 .table-center__status {

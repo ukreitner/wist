@@ -10,10 +10,13 @@ import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
 
 export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
-  const { playerForSeat, selfName, contractText, hand, bettingValues, minimumBet, currentBets, currentTaken, currentTurn, submitBet, error, clearError } = useDemoState();
+  const { playerForSeat, selfName, contractText, hand, bettingValues, minimumBet, currentBets, currentTaken, currentTurn, recentlyReceivedCardCodes, submitBet, error, clearError } = useDemoState();
   const otherSeats = (['N', 'E', 'S', 'W'] as const).filter((seat) => seat !== 'W');
   const total = Object.values(currentBets).reduce<number>((sum, value) => sum + (value ?? 0), 0);
   const forbidden = 13 - total;
+  const betCount = Object.values(currentBets).filter((value) => value !== undefined).length;
+  const isFinalBettor = betCount === 3;
+  const showThirteenWarning = isFinalBettor && forbidden >= minimumBet && forbidden <= 13;
 
   const BettingCenter = (
     <View style={s.centerWrap}>
@@ -49,7 +52,7 @@ export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
 
         <View style={s.handWrap}>
           <Text style={s.handLabel}>Your Hand · {selfName}</Text>
-          <HandFan cards={hand} />
+          <HandFan cards={hand} highlighted={new Set(recentlyReceivedCardCodes)} />
         </View>
 
         <View style={s.panel}>
@@ -60,7 +63,7 @@ export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
             </View>
           </View>
 
-          {bettingValues.includes(forbidden) ? (
+          {showThirteenWarning ? (
             <View style={s.warn}>
               <Text style={s.warnText}>Cannot bet {forbidden} because it would total exactly 13.</Text>
             </View>

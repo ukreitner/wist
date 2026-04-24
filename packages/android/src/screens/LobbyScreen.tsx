@@ -70,7 +70,7 @@ export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
                 <LinearGradient colors={['#20553e', '#112b21']} style={s.avatar}>
                   <Text style={s.avatarText}>{p.nickname[0]}</Text>
                 </LinearGradient>
-                <View style={{ flex: 1 }}>
+                <View style={s.playerMain}>
                   <Text style={s.playerName}>{p.nickname}{p.isHost ? ' 👑' : ''}</Text>
                   <Text style={s.playerSeat}>{p.seat ? `Seat ${p.seat}` : 'Unseated'}</Text>
                 </View>
@@ -169,6 +169,7 @@ const s = StyleSheet.create({
   panelEyebrow: { color: T.goldDeep, fontSize: 10, fontWeight: '800', letterSpacing: 1.8, textTransform: 'uppercase' },
   playerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 10,
     paddingVertical: 9,
@@ -186,15 +187,18 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { color: T.goldSoft, fontFamily: T.serif, fontSize: 14, fontWeight: '700' },
+  playerMain: { flex: 1, minWidth: 110 },
   playerName: { fontSize: 14, fontWeight: '600', color: T.ink },
   playerSeat: { fontSize: 11, color: T.muted },
   statusTag: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: 99 },
   statusOnline: { backgroundColor: 'rgba(37,93,66,0.14)' },
   statusOffline: { backgroundColor: 'rgba(142,62,56,0.12)' },
   statusTagText: { fontSize: 10, fontWeight: '800' },
-  seatActions: { width: '100%', flexDirection: 'row', gap: 4, marginTop: 8 },
+  seatActions: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   seatBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minWidth: 54,
     paddingVertical: 6,
     borderRadius: 99,
     backgroundColor: 'rgba(18,42,32,0.08)',

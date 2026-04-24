@@ -65,6 +65,7 @@ type DemoStateValue = {
   legalPlayCardCodes: string[];
   auctionBids: AuctionBid[];
   bettingValues: number[];
+  recentlyReceivedCardCodes: string[];
   minimumBet: number;
   currentTurn: Seat | null;
   currentTrick: NonNullable<PublicMatchState["currentHand"]>["currentTrick"];
@@ -184,6 +185,8 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
   const [socketState, setSocketState] = useState<"disconnected" | "connecting" | "connected">("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [publicAppUrl, setPublicAppUrl] = useState<string | null>(null);
+  const [recentlyReceivedCardCodes, setRecentlyReceivedCardCodes] = useState<string[]>([]);
+  const previousHandRef = useRef<{ handId: string; phase: string; cardCodes: string[] } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -300,6 +303,40 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
 
   const privateView = snapshot && isPrivateView(snapshot.view) ? snapshot.view : null;
   const currentHand = snapshot?.match.currentHand ?? null;
+  const handId = currentHand ? String(currentHand.id) : null;
+  const handPhase = currentHand?.phase ?? null;
+
+  useEffect(() => {
+    if (!privateView || !handId || !handPhase) {
+      previousHandRef.current = null;
+      setRecentlyReceivedCardCodes([]);
+      return;
+    }
+
+    const cardCodes = privateView.hand.map((card) => card.code);
+    const previous = previousHandRef.current;
+
+    if (previous?.handId === handId && previous.phase === "passing" && handPhase !== "passing") {
+      const previousCodes = new Set(previous.cardCodes);
+      const receivedCodes = cardCodes.filter((code) => !previousCodes.has(code));
+
+      if (receivedCodes.length > 0) {
+        setRecentlyReceivedCardCodes(receivedCodes);
+      }
+    }
+
+    previousHandRef.current = { handId, phase: handPhase, cardCodes };
+  }, [handId, handPhase, privateView]);
+
+  useEffect(() => {
+    if (recentlyReceivedCardCodes.length === 0) {
+      return;
+    }
+
+    const timeout = setTimeout(() => setRecentlyReceivedCardCodes([]), 12000);
+    return () => clearTimeout(timeout);
+  }, [recentlyReceivedCardCodes]);
+
   const players = useMemo<DemoPlayer[]>(
     () =>
       snapshot?.players
@@ -347,6 +384,7 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
       legalPlayCardCodes: privateView?.legalActions.playing?.cardCodes ?? [],
       auctionBids: privateView?.legalActions.auction?.bids ?? [],
       bettingValues: privateView?.legalActions.betting?.values ?? [],
+      recentlyReceivedCardCodes,
       minimumBet: privateView?.legalActions.betting?.min ?? 0,
       currentTurn: currentHand?.currentTurn ?? null,
       currentTrick: currentHand?.currentTrick ?? null,
@@ -399,6 +437,7 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
       privateView,
       profileNickname,
       publicAppUrl,
+      recentlyReceivedCardCodes,
       recentRooms,
       rejoinUrl,
       selfSeat,

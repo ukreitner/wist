@@ -5,11 +5,12 @@ import { displayCardKey, sortCardsForDisplay, visualCardKey, type VisibleCard } 
 type Props = {
   cards: VisibleCard[];
   playable?: Set<string>;
+  highlighted?: Set<string>;
   selectedCard?: string | null;
   onCardPress?: (key: string, card: VisibleCard) => void;
 };
 
-export function HandFan({ cards, playable, selectedCard, onCardPress }: Props) {
+export function HandFan({ cards, playable, highlighted, selectedCard, onCardPress }: Props) {
   const sortedCards = sortCardsForDisplay(cards);
   const cardW = sortedCards.length <= 8 ? 66 : 60;
 
@@ -20,6 +21,7 @@ export function HandFan({ cards, playable, selectedCard, onCardPress }: Props) {
         const visualKey = visualCardKey(card);
         const isSelected = selectedCard === key || selectedCard === visualKey;
         const isPlayable = playable ? playable.has(key) || playable.has(visualKey) : true;
+        const isHighlighted = highlighted ? highlighted.has(key) || highlighted.has(visualKey) : false;
         const content = (
           <WistCard
             rank={card.rank}
@@ -27,6 +29,7 @@ export function HandFan({ cards, playable, selectedCard, onCardPress }: Props) {
             width={cardW}
             selected={isSelected}
             playable={isPlayable}
+            highlighted={isHighlighted}
             onPress={undefined}
           />
         );

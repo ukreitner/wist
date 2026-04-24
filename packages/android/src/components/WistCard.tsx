@@ -12,11 +12,12 @@ type Props = {
   width?: number;
   selected?: boolean;
   playable?: boolean;
+  highlighted?: boolean;
   faceDown?: boolean;
   onPress?: () => void;
 };
 
-function WistCardImpl({ rank, suit, width = 68, selected = false, playable = true, faceDown = false, onPress }: Props) {
+function WistCardImpl({ rank, suit, width = 68, selected = false, playable = true, highlighted = false, faceDown = false, onPress }: Props) {
   const h = Math.round((width * 260) / 180);
 
   if (faceDown) {
@@ -51,6 +52,7 @@ function WistCardImpl({ rank, suit, width = 68, selected = false, playable = tru
       style={[
         s.cardShell,
         selected && s.cardShellSelected,
+        highlighted && s.cardShellHighlighted,
         {
           width,
           height: h,
@@ -73,6 +75,7 @@ function WistCardImpl({ rank, suit, width = 68, selected = false, playable = tru
           </LinearGradient>
         </Defs>
         <Rect x={6} y={6} width={168} height={248} rx={22} fill={`url(#${gid})`} stroke="#b79563" strokeWidth={3} />
+        {highlighted ? <Rect x={10} y={10} width={160} height={240} rx={20} fill="none" stroke="#d5a652" strokeWidth={7} opacity={0.9} /> : null}
         <Rect x={15} y={15} width={150} height={230} rx={17} fill="none" stroke="#fff8e8" strokeWidth={2} opacity={0.82} />
         <Rect x={24} y={96} width={132} height={68} rx={24} fill={`url(#${accentGid})`} />
         <Path d="M34 92 C58 62, 122 62, 146 92" stroke={fill} strokeWidth={4} strokeLinecap="round" fill="none" opacity={0.18} />
@@ -142,6 +145,13 @@ const s = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
+  },
+  cardShellHighlighted: {
+    shadowColor: '#f5c460',
+    shadowOpacity: 0.85,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 14,
   },
   faceDown: {
     backgroundColor: '#19372a',

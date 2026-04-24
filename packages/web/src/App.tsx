@@ -630,22 +630,32 @@ export default function App() {
   );
 
   const renderRoomTools = () => (
-    <article className="panel sidebar-panel rejoin-panel">
-      <header className="sidebar-panel__header">
-        <div>
-          <span className="panel-kicker">{t.room}</span>
-          <h2>{t.copyRejoinLink}</h2>
-        </div>
-      </header>
-      <div className="room-tools__body">
+    <article className="panel sidebar-panel rejoin-panel room-tools-panel--quiet">
+      <details className="room-tools-menu">
+        <summary>
+          <span>
+            <span className="panel-kicker">{t.room}</span>
+            <strong>{t.roomTools}</strong>
+          </span>
+        </summary>
         <div className="room-code-chip">
           <span>{t.roomCode}</span>
           <strong>{snapshot?.roomCode}</strong>
         </div>
         <div className="room-tools__actions">
+          <button type="button" className="ghost-button wide-button" onClick={() => void copyText(snapshot?.roomCode ?? "")}>
+            {t.copyCode}
+          </button>
           <button
             type="button"
-            className="cta-button wide-button"
+            className="ghost-button wide-button"
+            onClick={() => (snapshot ? void copyText(roomUrl(snapshot.roomCode)) : undefined)}
+          >
+            {t.copyInviteLink}
+          </button>
+          <button
+            type="button"
+            className="ghost-button wide-button"
             onClick={() => (snapshot && session ? void copyText(rejoinUrl(snapshot.roomCode, session.token)) : undefined)}
           >
             {t.copyRejoinLink}
@@ -658,7 +668,7 @@ export default function App() {
             </button>
           </div>
         ) : null}
-      </div>
+      </details>
     </article>
   );
 
@@ -744,28 +754,11 @@ export default function App() {
         <article className="panel lobby-control-panel">
           <header className="panel-header">
             <div>
-              <span className="panel-kicker">{t.roomTools}</span>
-              <h2>{t.roomTools}</h2>
+              <span className="panel-kicker">{t.room}</span>
+              <h2>{t.startMatch}</h2>
             </div>
           </header>
           <div className="room-tools__body">
-            <button type="button" className="ghost-button wide-button" onClick={() => void copyText(snapshot?.roomCode ?? "")}>
-              {t.copyCode}
-            </button>
-            <button
-              type="button"
-              className="ghost-button wide-button"
-              onClick={() => (snapshot ? void copyText(roomUrl(snapshot.roomCode)) : undefined)}
-            >
-              {t.copyInviteLink}
-            </button>
-            <button
-              type="button"
-              className="ghost-button wide-button"
-              onClick={() => (snapshot && session ? void copyText(rejoinUrl(snapshot.roomCode, session.token)) : undefined)}
-            >
-              {t.copyRejoinLink}
-            </button>
             <p className="panel-muted">{snapshot?.controls.canStartMatch ? t.readyToStart : t.seatPrompt}</p>
             <button
               type="button"
@@ -776,6 +769,31 @@ export default function App() {
             >
               {t.startMatch}
             </button>
+            <details className="room-tools-menu lobby-tools-menu">
+              <summary>
+                <span>
+                  <span className="panel-kicker">{t.room}</span>
+                  <strong>{t.roomTools}</strong>
+                </span>
+              </summary>
+              <button type="button" className="ghost-button wide-button" onClick={() => void copyText(snapshot?.roomCode ?? "")}>
+                {t.copyCode}
+              </button>
+              <button
+                type="button"
+                className="ghost-button wide-button"
+                onClick={() => (snapshot ? void copyText(roomUrl(snapshot.roomCode)) : undefined)}
+              >
+                {t.copyInviteLink}
+              </button>
+              <button
+                type="button"
+                className="ghost-button wide-button"
+                onClick={() => (snapshot && session ? void copyText(rejoinUrl(snapshot.roomCode, session.token)) : undefined)}
+              >
+                {t.copyRejoinLink}
+              </button>
+            </details>
           </div>
         </article>
       </section>

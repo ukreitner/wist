@@ -30,7 +30,7 @@ function TrickCardSlot({ seat, name, rank, suit }: { seat: Seat; name: string; r
 
 export default function PlayScreen({ navigation }: NavProps<'Play'>) {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
-  const { playerForSeat, selfName, contractText, hand, legalPlayCardCodes, currentTrick, completedTricks, currentBets, currentTaken, currentTurn, playCard, error, clearError } = useDemoState();
+  const { playerForSeat, selfName, contractText, hand, legalPlayCardCodes, currentTrick, completedTricks, currentBets, currentTaken, currentTurn, recentlyReceivedCardCodes, playCard, error, clearError } = useDemoState();
   const playable = useMemo(() => new Set(legalPlayCardCodes), [legalPlayCardCodes]);
   const selectedCardInfo = selectedCard ? hand.find((entry) => entry.code === selectedCard) ?? null : null;
   const latestTrick = completedTricks.at(-1) ?? null;
@@ -86,6 +86,7 @@ export default function PlayScreen({ navigation }: NavProps<'Play'>) {
           <HandFan
             cards={hand}
             playable={playable}
+            highlighted={new Set(recentlyReceivedCardCodes)}
             selectedCard={selectedCard}
             onCardPress={(key, card) => setSelectedCard(selectedCard === key ? null : card.code ?? key)}
           />
