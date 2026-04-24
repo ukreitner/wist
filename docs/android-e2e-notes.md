@@ -75,6 +75,34 @@
   - open `exp://127.0.0.1:8081` in Expo Go after `adb reverse tcp:8081 tcp:8081`
 - If we want fully automated mobile e2e next, wire the Android flow to a stable runner or Expo dev build target instead of Expo Go.
 
+## APK Release Notes
+
+- Android release metadata lives in `packages/android/app.json`.
+- Current Android package id: `com.ukreitner.wist`.
+- Current shareable APK profile: `preview` in `packages/android/eas.json`.
+- The preview and development build profiles bake in:
+  - `EXPO_PUBLIC_SERVER_URL=https://wist-z1k0.onrender.com`
+- The production profile builds an Android App Bundle (`.aab`) for a future Play Store path.
+- Runtime permissions are intentionally minimal:
+  - `android.permission.INTERNET`
+- Release config blocks storage, overlay, and vibration permissions that native dependencies may otherwise add:
+  - `android.permission.READ_EXTERNAL_STORAGE`
+  - `android.permission.SYSTEM_ALERT_WINDOW`
+  - `android.permission.VIBRATE`
+  - `android.permission.WRITE_EXTERNAL_STORAGE`
+- To create a friend-shareable APK from `packages/android`:
+  - `npm run build:apk`
+- If you want a local APK build instead of the EAS cloud builder:
+  - `npm run build:apk:local`
+- If EAS login is unavailable, the local Gradle fallback from `packages/android` is:
+  - `EXPO_PUBLIC_SERVER_URL=https://wist-z1k0.onrender.com npm run build:apk:gradle`
+- Current local APK artifact path after the first successful build:
+  - `artifacts/wist-android-preview-v1.apk`
+- Manual local release build command used successfully from `packages/android/android`:
+  - `JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/ukreitner/Documents/Codex/2026-04-23-github-plugin-github-openai-curated-test-2/wist-android/.android-sdk ANDROID_SDK_ROOT=/Users/ukreitner/Documents/Codex/2026-04-23-github-plugin-github-openai-curated-test-2/wist-android/.android-sdk NODE_ENV=production EXPO_PUBLIC_SERVER_URL=https://wist-z1k0.onrender.com ./gradlew assembleRelease --console=plain --no-daemon`
+- First EAS build on a new machine/account may ask you to log in, link/create the Expo project, and generate Android credentials.
+- For APK sharing, choose an internal/preview build artifact, not the Play Store `.aab`.
+
 ## Current Public Android Runbook
 
 Use this flow when the goal is emulator screenshots against the hosted multiplayer backend:
