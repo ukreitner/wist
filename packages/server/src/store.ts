@@ -192,6 +192,27 @@ export class SqliteRoomStore implements RoomStore {
     this.flush();
   }
 
+  async appendGameEvent(room: RoomState, event: GameEvent): Promise<void> {
+    this.database.run(
+      `
+        UPDATE rooms
+        SET updatedAt = ?, status = ?, snapshotJson = ?, testPresetCursor = ?
+        WHERE id = ?
+      `,
+      [room.updatedAt, room.status, JSON.stringify({ match: room.match }), room.testPresetCursor, room.id]
+    );
+
+    this.database.run(
+      `
+        INSERT INTO events (id, roomId, seq, payloadJson, createdAt)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [event.id, room.id, room.events.length - 1, JSON.stringify(event), event.at]
+    );
+
+    this.flush();
+  }
+
   async deleteRoom(roomId: string): Promise<void> {
     this.database.run("DELETE FROM events WHERE roomId = ?", [roomId]);
     this.database.run("DELETE FROM sessions WHERE roomId = ?", [roomId]);

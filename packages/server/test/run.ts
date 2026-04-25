@@ -9,6 +9,18 @@ const waitForSnapshot = (socket: Socket): Promise<RoomSnapshot> =>
     socket.once("snapshot", (snapshot: RoomSnapshot) => resolve(snapshot));
   });
 
+const waitForSnapshotWhere = (socket: Socket, predicate: (snapshot: RoomSnapshot) => boolean): Promise<RoomSnapshot> =>
+  new Promise((resolve) => {
+    const onSnapshot = (snapshot: RoomSnapshot) => {
+      if (predicate(snapshot)) {
+        socket.off("snapshot", onSnapshot);
+        resolve(snapshot);
+      }
+    };
+
+    socket.on("snapshot", onSnapshot);
+  });
+
 const run = async (): Promise<void> => {
   const serverInstance = await createAppServer({
     dbPath: `.data/test-${Date.now()}-${Math.random()}.sqlite`,
@@ -47,11 +59,12 @@ const run = async (): Promise<void> => {
       hostSocket.emit("seat.assign", { sessionId: east.body.snapshot.me.sessionId, seat: "E" });
       hostSocket.emit("seat.assign", { sessionId: south.body.snapshot.me.sessionId, seat: "S" });
       hostSocket.emit("seat.assign", { sessionId: west.body.snapshot.me.sessionId, seat: "W" });
-      hostSocket.emit("match.start");
-      const started = await waitForSnapshot(hostSocket);
+      hostSocket.emit("match.start", { initialScores: { N: 12, E: -3, S: 5, W: 0 } });
+      const started = await waitForSnapshotWhere(hostSocket, (snapshot) => snapshot.roomStatus === "active");
 
       assert.equal(started.roomStatus, "active");
       assert.equal(started.match.currentHand?.phase, "auction");
+      assert.deepEqual(started.match.scores, { N: 12, E: -3, S: 5, W: 0 });
       assert.equal("viewerSeat" in started.view, true);
       console.log("ok - room lifecycle and match start");
     }

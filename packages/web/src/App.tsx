@@ -88,6 +88,7 @@ export default function App() {
   const [joinNickname, setJoinNickname] = useState(savedNickname);
   const [joinRoomCode, setJoinRoomCode] = useState("");
   const [selectedPassCards, setSelectedPassCards] = useState<string[]>([]);
+  const [initialScores, setInitialScores] = useState<Record<Seat, string>>({ N: "0", E: "0", S: "0", W: "0" });
   const [selectedAuctionTrump, setSelectedAuctionTrump] = useState<Trump | null>(null);
   const [selectedAuctionTricks, setSelectedAuctionTricks] = useState<number | null>(null);
   const [heldCompletedTrick, setHeldCompletedTrick] = useState<Trick | null>(null);
@@ -312,6 +313,15 @@ export default function App() {
   const emit = (eventName: string, payload?: unknown): void => {
     socketRef.current?.emit(eventName, payload);
   };
+
+  const parsedInitialScores = (): Record<Seat, number> =>
+    SEATS.reduce<Record<Seat, number>>(
+      (scores, seat) => ({
+        ...scores,
+        [seat]: Number.parseInt(initialScores[seat] || "0", 10) || 0
+      }),
+      { N: 0, E: 0, S: 0, W: 0 }
+    );
 
   useEffect(() => {
     if (nextHandTimerRef.current) {
@@ -800,12 +810,37 @@ export default function App() {
           </header>
           <div className="room-tools__body">
             <p className="panel-muted">{snapshot?.controls.canStartMatch ? t.readyToStart : t.seatPrompt}</p>
+            <div className="starting-scores">
+              <div>
+                <span className="panel-kicker">{t.startingScores}</span>
+                <p className="panel-muted">{t.startingScoresHint}</p>
+              </div>
+              <div className="starting-scores__grid">
+                {SEATS.map((seat) => (
+                  <label key={`initial-score-${seat}`}>
+                    <span>{seatPlayers.get(seat)?.nickname ?? seatLabel(seat, locale)}</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={initialScores[seat]}
+                      disabled={!snapshot?.controls.canAssignSeats}
+                      onChange={(event) =>
+                        setInitialScores((current) => ({
+                          ...current,
+                          [seat]: event.target.value
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
             <button
               type="button"
               className="cta-button wide-button"
               data-testid="start-match"
               disabled={!snapshot?.controls.canStartMatch}
-              onClick={() => emit("match.start")}
+              onClick={() => emit("match.start", { initialScores: parsedInitialScores() })}
             >
               {t.startMatch}
             </button>

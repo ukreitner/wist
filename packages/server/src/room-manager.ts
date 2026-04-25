@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import {
   SEATS,
+  applyEvent,
   createMatch,
+  deriveUndoWindow,
   materializeMatch,
   nextDealer,
   toPlayerView,
@@ -10,6 +12,7 @@ import {
   type GameEvent,
   type HandStartEvent,
   type MatchState,
+  type ScoreMap,
   type Seat
 } from "@wist/core";
 import { PostgresRoomStore } from "./postgres-store.js";
@@ -21,6 +24,7 @@ import type {
   RoomSnapshot,
   RoomState,
   RoomSummaryPlayer,
+  StartMatchOptions,
   TestHandDefinition,
   TestScenario
 } from "./types.js";
@@ -40,6 +44,35 @@ const cloneMatch = (match: MatchState): MatchState => structuredClone(match);
 
 const normalizeCode = (code: string): string => code.trim().toUpperCase();
 const normalizeNickname = (nickname: string): string => nickname.trim().toLocaleLowerCase();
+
+const zeroScores = (): ScoreMap => ({ N: 0, E: 0, S: 0, W: 0 });
+
+const copyScores = (scores: ScoreMap): ScoreMap => ({
+  N: scores.N,
+  E: scores.E,
+  S: scores.S,
+  W: scores.W
+});
+
+const normalizeInitialScores = (scores: StartMatchOptions["initialScores"]): ScoreMap => {
+  const normalized = zeroScores();
+
+  if (!scores) {
+    return normalized;
+  }
+
+  for (const seat of SEATS) {
+    const value = scores[seat] ?? 0;
+
+    if (!Number.isInteger(value) || value < -9999 || value > 9999) {
+      throw new Error("Starting scores must be whole numbers between -9999 and 9999.");
+    }
+
+    normalized[seat] = value;
+  }
+
+  return normalized;
+};
 
 const buildRoomPlayers = (room: RoomState): RoomSummaryPlayer[] =>
   [...room.sessions]
@@ -109,18 +142,43 @@ export class RoomManager {
   private async persist(room: RoomState): Promise<RoomState> {
     room.updatedAt = nowIso();
     await this.store.saveRoom(room);
+    this.indexRoom(room);
+    return room;
+  }
+
+  private async persistAppendedGameEvent(room: RoomState, event: GameEvent): Promise<RoomState> {
+    room.updatedAt = nowIso();
+
+    if (this.store.appendGameEvent) {
+      await this.store.appendGameEvent(room, event);
+    } else {
+      await this.store.saveRoom(room);
+    }
+
+    this.indexRoom(room);
+    return room;
+  }
+
+  private indexRoom(room: RoomState): void {
     this.roomsByCode.set(room.code, room);
 
     for (const session of room.sessions) {
       this.roomCodeByToken.set(session.token, room.code);
     }
-
-    return room;
   }
 
   private baseMatchForRoom(room: RoomState, dealer: Seat): MatchState {
+    const initialScores = copyScores(room.match.scores);
+
+    for (const hand of room.match.completedHands) {
+      for (const seat of SEATS) {
+        initialScores[seat] -= hand.scoreDelta[seat];
+      }
+    }
+
     return createMatch({
       initialDealer: dealer,
+      initialScores,
       createdAt: room.createdAt
     });
   }
@@ -379,7 +437,7 @@ export class RoomManager {
     return this.persist(room);
   }
 
-  async startMatch(actorToken: string): Promise<RoomState> {
+  async startMatch(actorToken: string, options: StartMatchOptions = {}): Promise<RoomState> {
     const room = this.lookupSessionRoom(actorToken);
     this.assertHost(room, actorToken);
 
@@ -393,8 +451,14 @@ export class RoomManager {
 
     const preset = room.testPresetKey ? this.config.testPresets[room.testPresetKey] : undefined;
     const dealer = preset?.initialDealer ?? randomSeat();
+    const initialScores = normalizeInitialScores(options.initialScores);
 
     room.events = [this.createHandStartEvent(room, 1, dealer)];
+    room.match = createMatch({
+      initialDealer: dealer,
+      initialScores,
+      createdAt: room.createdAt
+    });
     room.match = materializeMatch(room.events, {
       match: this.baseMatchForRoom(room, dealer)
     });
@@ -455,9 +519,14 @@ export class RoomManager {
       seat: session.seat
     } as GameEvent;
     const nextEvents = [...room.events, appended];
-    const nextMatch = materializeMatch(nextEvents, {
-      match: this.baseMatchForRoom(room, room.match.dealer)
-    });
+    const nextMatch =
+      appended.type === "undo.requested"
+        ? materializeMatch(nextEvents, {
+            match: this.baseMatchForRoom(room, room.match.dealer)
+          })
+        : applyEvent(room.match, appended);
+
+    nextMatch.undoWindow = deriveUndoWindow(nextEvents);
 
     room.events = nextEvents;
     room.match = nextMatch;
@@ -465,7 +534,7 @@ export class RoomManager {
       room.status = "ended";
     }
 
-    await this.persist(room);
+    await this.persistAppendedGameEvent(room, appended);
     return { room, appended };
   }
 

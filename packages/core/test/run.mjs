@@ -69,6 +69,18 @@ const tests = [
     }
   },
   {
+    name: "match starts from supplied scores",
+    run() {
+      const match = createMatch({
+        initialDealer: "N",
+        initialScores: { N: 12, E: -3, S: 5, W: 0 },
+        createdAt: eventAt(0)
+      });
+
+      assert.deepEqual(match.scores, { N: 12, E: -3, S: 5, W: 0 });
+    }
+  },
+  {
     name: "trick resolution",
     run() {
       const trumpTrick = resolveTrick(

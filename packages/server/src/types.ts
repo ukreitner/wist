@@ -64,6 +64,10 @@ export interface RoomSnapshot {
   };
 }
 
+export interface StartMatchOptions {
+  initialScores?: Partial<Record<Seat, number>>;
+}
+
 export interface RoomManagerConfig {
   dbPath?: string;
   databaseUrl?: string;

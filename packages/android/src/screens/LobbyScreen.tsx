@@ -1,4 +1,5 @@
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Share, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../theme';
 import type { NavProps } from '../nav';
@@ -15,8 +16,17 @@ function SeatBox({ seat, name }: { seat: Seat; name: string }) {
 
 export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
   const { roomCode, players, playerForSeat, snapshot, startMatch, assignSeat, inviteUrl, rejoinUrl, error, clearError } = useDemoState();
+  const [initialScores, setInitialScores] = useState<Record<Seat, string>>({ N: '0', E: '0', S: '0', W: '0' });
   const connectedCount = snapshot?.players.filter((player) => player.connected).length ?? 0;
   const seatedCount = players.length;
+  const canEditScores = Boolean(snapshot?.controls.canAssignSeats);
+
+  const parsedInitialScores = (): Record<Seat, number> => ({
+    N: Number.parseInt(initialScores.N || '0', 10) || 0,
+    E: Number.parseInt(initialScores.E || '0', 10) || 0,
+    S: Number.parseInt(initialScores.S || '0', 10) || 0,
+    W: Number.parseInt(initialScores.W || '0', 10) || 0,
+  });
 
   const shareText = async (value: string | null, fallback: string) => {
     await Share.share({
@@ -95,11 +105,29 @@ export default function LobbyScreen({ navigation }: NavProps<'Lobby'>) {
 
         {/* Actions */}
         <View style={{ gap: 8, marginTop: 4 }}>
+          <View style={s.panel}>
+            <Text style={s.panelEyebrow}>Starting Scores</Text>
+            <Text style={s.scoreHint}>Use this to continue a game you started in person.</Text>
+            <View style={s.scoreGrid}>
+              {(['N', 'E', 'S', 'W'] as Seat[]).map((seat) => (
+                <View key={`score-${seat}`} style={s.scoreField}>
+                  <Text style={s.scoreLabel}>{playerForSeat(seat).name}</Text>
+                  <TextInput
+                    value={initialScores[seat]}
+                    onChangeText={(value) => setInitialScores((current) => ({ ...current, [seat]: value }))}
+                    keyboardType="number-pad"
+                    editable={canEditScores}
+                    style={[s.scoreInput, !canEditScores && s.scoreInputDisabled]}
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
           <TouchableOpacity
             style={[s.cta, !snapshot?.controls.canStartMatch && s.ctaDisabled]}
             onPress={() => {
               clearError();
-              startMatch();
+              startMatch(parsedInitialScores());
             }}
             disabled={!snapshot?.controls.canStartMatch}
             testID="cta-start-match"
@@ -220,5 +248,20 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   ghostText: { color: T.ink, fontWeight: '600', fontSize: 13 },
+  scoreHint: { color: T.muted, fontSize: 12, marginTop: 5 },
+  scoreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  scoreField: { flexBasis: '47%', flexGrow: 1, gap: 5 },
+  scoreLabel: { color: T.muted, fontSize: 11, fontWeight: '800' },
+  scoreInput: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(109,86,46,0.18)',
+    backgroundColor: 'rgba(255,253,247,0.92)',
+    color: T.ink,
+    fontWeight: '800',
+  },
+  scoreInputDisabled: { opacity: 0.55 },
   errorText: { color: '#f1a39c', fontWeight: '700', fontSize: 12, textAlign: 'center' },
 });

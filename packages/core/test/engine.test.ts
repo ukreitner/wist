@@ -118,6 +118,18 @@ describe("resolveTrick", () => {
   });
 });
 
+describe("createMatch", () => {
+  it("starts from supplied scores", () => {
+    const match = createMatch({
+      initialDealer: "N",
+      initialScores: { N: 12, E: -3, S: 5, W: 0 },
+      createdAt: eventAt(0)
+    });
+
+    assert.deepEqual(match.scores, { N: 12, E: -3, S: 5, W: 0 });
+  });
+});
+
 describe("materializeMatch", () => {
   it("plays a deterministic full hand and scores it", () => {
     const cardsBySeat: Record<Seat, Card[]> = {

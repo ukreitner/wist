@@ -121,6 +121,7 @@ export interface MatchState {
 
 export interface CreateMatchOptions {
   initialDealer: Seat;
+  initialScores?: ScoreMap;
   createdAt?: string;
 }
 

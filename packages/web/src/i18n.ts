@@ -33,6 +33,8 @@ type MessageSet = {
   readyToStart: string;
   seatPrompt: string;
   startMatch: string;
+  startingScores: string;
+  startingScoresHint: string;
   tableInMotion: string;
   auctionOpening: string;
   contract: string;
@@ -122,6 +124,8 @@ export const MESSAGES: Record<Locale, MessageSet> = {
     readyToStart: "All four seats are filled.",
     seatPrompt: "Seat all four players to begin.",
     startMatch: "Start Match",
+    startingScores: "Starting Scores",
+    startingScoresHint: "Use this to continue a game you started in person.",
     tableInMotion: "Table In Motion",
     auctionOpening: "Auction opening",
     contract: "Contract",
@@ -209,6 +213,8 @@ export const MESSAGES: Record<Locale, MessageSet> = {
     readyToStart: "כל ארבעת המושבים מלאים.",
     seatPrompt: "שבצו ארבעה שחקנים כדי להתחיל.",
     startMatch: "התחל משחק",
+    startingScores: "ניקוד פתיחה",
+    startingScoresHint: "השתמשו בזה כדי להמשיך משחק שהתחיל פנים אל פנים.",
     tableInMotion: "המשחק בעיצומו",
     auctionOpening: "פתיחת מכרז",
     contract: "חוזה",

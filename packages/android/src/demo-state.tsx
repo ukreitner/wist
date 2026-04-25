@@ -87,7 +87,7 @@ type DemoStateValue = {
   highestBidText: string | null;
   clearError: () => void;
   assignSeat: (sessionId: string, seat: Seat) => void;
-  startMatch: () => void;
+  startMatch: (initialScores?: Partial<Record<Seat, number>>) => void;
   submitPass: (cardCodes: string[]) => void;
   submitAuctionBid: (bid: AuctionBid) => void;
   submitAuctionPass: () => void;
@@ -411,7 +411,7 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
       highestBidText,
       clearError: () => setError(null),
       assignSeat: (sessionId, seat) => emit("seat.assign", { sessionId, seat }),
-      startMatch: () => emit("match.start"),
+      startMatch: (initialScores) => emit("match.start", { initialScores }),
       submitPass: (cardCodes) => emit("pass.submit", { cardCodes }),
       submitAuctionBid: (bid) => emit("auction.action", { kind: "bid", bid }),
       submitAuctionPass: () => emit("auction.action", { kind: "pass" }),

@@ -183,6 +183,27 @@ export class PostgresRoomStore implements RoomStore {
     });
   }
 
+  async appendGameEvent(room: RoomState, event: GameEvent): Promise<void> {
+    await this.runInTransaction(async (query) => {
+      await query(
+        `
+          UPDATE rooms
+          SET updated_at = $1, status = $2, snapshot_json = $3, test_preset_cursor = $4
+          WHERE id = $5
+        `,
+        [room.updatedAt, room.status, JSON.stringify({ match: room.match }), room.testPresetCursor, room.id]
+      );
+
+      await query(
+        `
+          INSERT INTO events (id, room_id, seq, payload_json, created_at)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        [event.id, room.id, room.events.length - 1, JSON.stringify(event), event.at]
+      );
+    });
+  }
+
   async deleteRoom(roomId: string): Promise<void> {
     await this.pool.query("DELETE FROM rooms WHERE id = $1", [roomId]);
   }

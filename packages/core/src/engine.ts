@@ -121,7 +121,7 @@ const eligibleUndoType = (event: GameEvent): UndoWindow["actionKind"] | null => 
 
 const eventSeat = (event: GameEvent): Seat | null => ("seat" in event ? event.seat : null);
 
-const deriveUndoWindow = (events: GameEvent[]): UndoWindow | null => {
+export const deriveUndoWindow = (events: GameEvent[]): UndoWindow | null => {
   const undoneTargets = new Set(
     events
       .filter((event): event is Extract<GameEvent, { type: "undo.requested" }> => event.type === "undo.requested")
@@ -423,7 +423,7 @@ export const createMatch = (options: CreateMatchOptions): MatchState => ({
   dealer: options.initialDealer,
   nextDealer: nextSeatInternal(options.initialDealer),
   handNumber: 0,
-  scores: zeroScores(),
+  scores: options.initialScores ? copyScores(options.initialScores) : zeroScores(),
   currentHand: null,
   completedHands: [],
   awaitingNextHand: false,

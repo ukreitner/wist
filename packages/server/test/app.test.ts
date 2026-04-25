@@ -10,6 +10,18 @@ const waitForSnapshot = (socket: Socket): Promise<RoomSnapshot> =>
     socket.once("snapshot", (snapshot: RoomSnapshot) => resolve(snapshot));
   });
 
+const waitForSnapshotWhere = (socket: Socket, predicate: (snapshot: RoomSnapshot) => boolean): Promise<RoomSnapshot> =>
+  new Promise((resolve) => {
+    const onSnapshot = (snapshot: RoomSnapshot) => {
+      if (predicate(snapshot)) {
+        socket.off("snapshot", onSnapshot);
+        resolve(snapshot);
+      }
+    };
+
+    socket.on("snapshot", onSnapshot);
+  });
+
 describe("app server", () => {
   let serverInstance: Awaited<ReturnType<typeof createAppServer>>;
   let baseUrl = "";
@@ -59,12 +71,13 @@ describe("app server", () => {
     hostSocket.emit("seat.assign", { sessionId: east.body.snapshot.me.sessionId, seat: "E" });
     hostSocket.emit("seat.assign", { sessionId: south.body.snapshot.me.sessionId, seat: "S" });
     hostSocket.emit("seat.assign", { sessionId: west.body.snapshot.me.sessionId, seat: "W" });
-    hostSocket.emit("match.start");
+    hostSocket.emit("match.start", { initialScores: { N: 12, E: -3, S: 5, W: 0 } });
 
-    const startedSnapshot = await waitForSnapshot(hostSocket);
+    const startedSnapshot = await waitForSnapshotWhere(hostSocket, (snapshot) => snapshot.roomStatus === "active");
 
     assert.equal(startedSnapshot.roomStatus, "active");
     assert.equal(startedSnapshot.match.currentHand?.phase, "auction");
+    assert.deepEqual(startedSnapshot.match.scores, { N: 12, E: -3, S: 5, W: 0 });
     assert.equal("viewerSeat" in startedSnapshot.view, true);
   });
 

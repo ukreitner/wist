@@ -6,7 +6,7 @@ import express from "express";
 import { Server as SocketServer } from "socket.io";
 import { RoomManager } from "./room-manager.js";
 import { TEST_PRESETS } from "./test-presets.js";
-import type { RoomSnapshot } from "./types.js";
+import type { RoomSnapshot, StartMatchOptions } from "./types.js";
 
 export interface AppServerConfig {
   port?: number;
@@ -238,8 +238,8 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
       })
     );
 
-    socket.on("match.start", guarded<void>(async () => {
-      await roomManager.startMatch(token);
+    socket.on("match.start", guarded<StartMatchOptions | undefined>(async (payload) => {
+      await roomManager.startMatch(token, payload ?? {});
     }));
 
     socket.on("match.nextHand", guarded<void>(async () => {

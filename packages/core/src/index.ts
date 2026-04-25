@@ -4,6 +4,7 @@ export {
   applyEvent,
   compareAuctionBid,
   createMatch,
+  deriveUndoWindow,
   listLegalActions,
   materializeMatch,
   nextDealer,
