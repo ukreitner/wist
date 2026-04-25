@@ -59,10 +59,13 @@ button {
 }
 
 .table-shell {
+  width: min(1600px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
   min-height: 100vh;
   padding-top: 14px;
   padding-bottom: 18px;
   gap: 14px;
+  overflow-x: clip;
 }
 
 .app-root {
@@ -601,19 +604,22 @@ input::placeholder {
 
 .table-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(288px, 328px);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
   gap: 16px;
   align-items: start;
+  min-width: 0;
 }
 
 .table-main {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .table-sidebar {
   display: grid;
   gap: 12px;
+  min-width: 0;
   position: sticky;
   top: 12px;
 }
@@ -627,7 +633,7 @@ input::placeholder {
 
 .table-stage {
   display: grid;
-  grid-template-columns: minmax(142px, 182px) minmax(280px, 1fr) minmax(142px, 182px);
+  grid-template-columns: minmax(124px, 170px) minmax(0, 1fr) minmax(124px, 170px);
   grid-template-rows: 96px minmax(350px, auto) 104px;
   grid-template-areas:
     ". north ."
@@ -636,6 +642,7 @@ input::placeholder {
   gap: 12px;
   padding: 16px;
   border-radius: 32px;
+  min-width: 0;
   background:
     radial-gradient(circle at 50% 50%, rgba(247, 211, 130, 0.22), transparent 32%),
     linear-gradient(160deg, var(--felt-1), var(--felt-2) 68%, var(--felt-3));
@@ -713,6 +720,8 @@ input::placeholder {
   gap: 10px;
   padding: 14px;
   border-radius: 24px;
+  min-width: 0;
+  overflow: visible;
   background: rgba(4, 17, 12, 0.2);
   border: 1px solid rgba(245, 223, 183, 0.1);
 }
@@ -765,16 +774,31 @@ input::placeholder {
 
 .trick-cluster {
   position: relative;
-  min-height: 240px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 230px;
+  padding: 26px 18px 42px;
+  overflow: visible;
   border-radius: 26px;
   background:
     radial-gradient(circle at center, rgba(255, 243, 218, 0.08), transparent 48%),
     rgba(4, 18, 13, 0.16);
 }
 
+.trick-zone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
+  gap: 10px;
+  min-width: 0;
+  align-items: stretch;
+}
+
 .trick-cluster p {
+  width: 100%;
   margin: 0;
-  padding-top: 150px;
   color: rgba(247, 234, 208, 0.82);
   text-align: center;
 }
@@ -909,13 +933,14 @@ input::placeholder {
 }
 
 .trick-card {
-  position: absolute;
+  position: static;
   display: grid;
   gap: 6px;
-  width: 122px;
+  width: clamp(82px, 8vw, 108px);
   justify-items: center;
   text-align: center;
   color: #f5e8cf;
+  transform: none;
   animation: trick-enter 180ms ease;
 }
 
@@ -933,39 +958,43 @@ input::placeholder {
 }
 
 .trick-card--n {
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: auto;
+  left: auto;
 }
 
 .trick-card--e {
-  right: 18px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: auto;
+  top: auto;
 }
 
 .trick-card--s {
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: auto;
+  left: auto;
 }
 
 .trick-card--w {
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: auto;
+  top: auto;
+}
+
+.trick-card--n,
+.trick-card--e,
+.trick-card--s,
+.trick-card--w {
+  transform: none;
 }
 
 .last-trick-tray {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
   padding: 12px 14px;
   border-radius: 22px;
   background: rgba(255, 244, 218, 0.09);
   border: 1px solid rgba(245, 223, 183, 0.12);
   color: #f8e8c7;
+  min-width: 0;
   overflow: visible;
 }
 
@@ -989,11 +1018,12 @@ input::placeholder {
 
 .last-trick-tray__cards {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 7px;
   min-width: 0;
-  overflow-x: auto;
-  padding: 4px 2px 6px;
+  overflow: visible;
+  padding: 2px 0;
 }
 
 .last-trick-card {
@@ -1003,8 +1033,8 @@ input::placeholder {
 }
 
 .last-trick-card .playing-card {
-  width: 56px;
-  min-width: 56px;
+  width: 52px;
+  min-width: 52px;
 }
 
 .hand-panel {
@@ -1414,7 +1444,11 @@ input::placeholder {
   }
 
   .trick-cluster {
-    min-height: 300px;
+    min-height: 230px;
+  }
+
+  .trick-zone {
+    grid-template-columns: 1fr;
   }
 
   .auction-board {
@@ -1422,7 +1456,7 @@ input::placeholder {
   }
 
   .trick-card {
-    width: 108px;
+    width: clamp(78px, 18vw, 100px);
   }
 }
 
@@ -1477,7 +1511,7 @@ input::placeholder {
   }
 
   .trick-cluster {
-    min-height: 256px;
+    min-height: 220px;
   }
 
   .auction-board {
@@ -1490,7 +1524,7 @@ input::placeholder {
   }
 
   .last-trick-tray {
-    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
   }
 
   .last-trick-tray__cards {
@@ -1500,7 +1534,7 @@ input::placeholder {
   }
 
   .trick-card {
-    width: 90px;
+    width: clamp(72px, 26vw, 92px);
   }
 
   .hand-fan {

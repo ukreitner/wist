@@ -1122,10 +1122,6 @@ export default function App() {
     ));
 
   const renderLastTrickTray = () => {
-    if (!lastCompletedTrick) {
-      return null;
-    }
-
     const lastTrickLabel = locale === "he" ? "הלקיחה האחרונה" : "Last trick";
     const wonByLabel = locale === "he" ? "זכה" : "won by";
 
@@ -1134,17 +1130,23 @@ export default function App() {
         <div>
           <span>{lastTrickLabel}</span>
           <strong>
-            {wonByLabel} {playerNameForSeat(lastCompletedTrick.winner)}
+            {lastCompletedTrick
+              ? `${wonByLabel} ${playerNameForSeat(lastCompletedTrick.winner)}`
+              : locale === "he"
+                ? "עוד אין"
+                : "None yet"}
           </strong>
         </div>
-        <div className="last-trick-tray__cards">
-          {lastCompletedTrick.plays.map((play) => (
-            <div key={`last-${play.seat}-${play.card.code}`} className="last-trick-card">
-              <span>{playerNameForSeat(play.seat)}</span>
-              <PlayingCard card={play.card} />
-            </div>
-          ))}
-        </div>
+        {lastCompletedTrick ? (
+          <div className="last-trick-tray__cards">
+            {lastCompletedTrick.plays.map((play) => (
+              <div key={`last-${play.seat}-${play.card.code}`} className="last-trick-card">
+                <span>{playerNameForSeat(play.seat)}</span>
+                <PlayingCard card={play.card} />
+              </div>
+            ))}
+          </div>
+        ) : null}
       </aside>
     );
   };
@@ -1335,7 +1337,7 @@ export default function App() {
               {currentHand?.phase === "auction" ? (
                 renderAuctionBoard()
               ) : (
-                <>
+                <div className="trick-zone">
                   <div className={`trick-cluster ${heldCompletedTrick && activeTrickPlays.length === 0 ? "is-holding-trick" : ""}`}>
                     {renderTrickCards(visibleTrickPlays)}
                     {heldCompletedTrick && activeTrickPlays.length === 0 ? (
@@ -1346,7 +1348,7 @@ export default function App() {
                     {visibleTrickPlays.length === 0 ? <p>{t.currentTrickEmpty}</p> : null}
                   </div>
                   {renderLastTrickTray()}
-                </>
+                </div>
               )}
             </div>
           </section>
