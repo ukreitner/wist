@@ -59,7 +59,7 @@ describe("scoreHand", () => {
     );
 
     assert.deepEqual(result, {
-      N: 2,
+      N: 7,
       E: -4,
       S: 7,
       W: -4

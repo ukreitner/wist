@@ -56,7 +56,7 @@ const tests = [
           { N: 0, E: 4, S: 5, W: 2 },
           { N: 0, E: 2, S: 5, W: 6 }
         ),
-        { N: 2, E: -4, S: 7, W: -4 }
+        { N: 7, E: -4, S: 7, W: -4 }
       );
       assert.equal(scoreHand({ N: 4, E: 4, S: 4, W: 4 }, { N: 4, E: 4, S: 4, W: 1 }).W, -3);
       assert.deepEqual(

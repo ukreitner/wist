@@ -347,7 +347,7 @@ const calculateScoreDelta = (bets: Record<Seat, number>, taken: ScoreMap): Score
     const tricksTaken = taken[seat];
 
     if (bet === 0 && tricksTaken === 0) {
-      results[seat] = 2;
+      results[seat] = 7;
     } else if (bet === tricksTaken) {
       results[seat] = bet + 2;
     } else {

@@ -60,7 +60,7 @@ const tests: Array<{ name: string; run: () => void }> = [
           { N: 0, E: 2, S: 5, W: 6 }
         ),
         {
-          N: 2,
+          N: 7,
           E: -4,
           S: 7,
           W: -4
