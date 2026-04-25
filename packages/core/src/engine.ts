@@ -244,6 +244,7 @@ const applyPassSelections = (hand: HandState): HandState => {
       W: null
     },
     passHistory: [...hand.passHistory, passRecords],
+    auctionLog: [],
     auctionTurn: nextSeatInternal(hand.dealer),
     highestBid: null,
     highestBidder: null,

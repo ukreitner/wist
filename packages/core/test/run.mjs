@@ -155,6 +155,9 @@ const tests = [
       events.push(passCards("E", firstPassHand.hands.E.slice(0, 3).map((card) => card.code)));
       events.push(passCards("S", firstPassHand.hands.S.slice(0, 3).map((card) => card.code)));
       events.push(passCards("W", firstPassHand.hands.W.slice(0, 3).map((card) => card.code)));
+      state = materializeMatch(events, { match: createMatch({ initialDealer: "N", createdAt: eventAt(0) }) });
+      assert.equal(state.currentHand.phase, "auction");
+      assert.equal(state.currentHand.auctionLog.length, 0);
       events.push({ type: "auction.pass", id: makeEventId(), at: eventAt(20), seat: "E" });
       events.push({ type: "auction.pass", id: makeEventId(), at: eventAt(21), seat: "S" });
       events.push({ type: "auction.pass", id: makeEventId(), at: eventAt(22), seat: "W" });
@@ -169,6 +172,9 @@ const tests = [
       events.push(passCards("S", secondPassHand.hands.S.slice(0, 3).map((card) => card.code)));
       events.push(passCards("W", secondPassHand.hands.W.slice(0, 3).map((card) => card.code)));
       const seedBeforeRedeal = secondPassHand.shuffleSeed;
+      state = materializeMatch(events, { match: createMatch({ initialDealer: "N", createdAt: eventAt(0) }) });
+      assert.equal(state.currentHand.phase, "auction");
+      assert.equal(state.currentHand.auctionLog.length, 0);
       events.push({ type: "auction.pass", id: makeEventId(), at: eventAt(30), seat: "E" });
       events.push({ type: "auction.pass", id: makeEventId(), at: eventAt(31), seat: "S" });
       events.push({ type: "auction.pass", id: makeEventId(), at: eventAt(32), seat: "W" });
