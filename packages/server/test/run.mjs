@@ -111,6 +111,25 @@ try {
   }
 
   {
+    const host = await request(baseUrl).post("/api/rooms").send({ nickname: "Socket Swap" });
+    const roomCode = host.body.roomCode;
+    const firstSocket = createClient(baseUrl, { transports: ["websocket"], auth: { roomCode, token: host.body.playerToken } });
+    sockets.push(firstSocket);
+    await waitForSnapshot(firstSocket);
+
+    const oldDisconnect = new Promise((resolve) => firstSocket.once("disconnect", resolve));
+    const replacementSocket = createClient(baseUrl, { transports: ["websocket"], auth: { roomCode, token: host.body.playerToken } });
+    sockets.push(replacementSocket);
+    await waitForSnapshot(replacementSocket);
+    await oldDisconnect;
+
+    replacementSocket.emit("seat.assign", { sessionId: host.body.snapshot.me.sessionId, seat: "N" });
+    const assigned = await waitForSnapshotWhere(replacementSocket, (snapshot) => snapshot.me.seat === "N");
+    assert.equal(assigned.players.find((player) => player.id === host.body.snapshot.me.sessionId)?.connected, true);
+    console.log("ok - replacement socket keeps private snapshot push");
+  }
+
+  {
     const host = await request(baseUrl).post("/api/rooms").send({ nickname: "Host 3" });
     const roomCode = host.body.roomCode;
     const east = await request(baseUrl).post(`/api/rooms/${roomCode}/join`).send({ nickname: "East 3" });

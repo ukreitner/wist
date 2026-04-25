@@ -325,6 +325,10 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
     });
 
     socket.on("disconnect", () => {
+      if (socketIdsByToken.get(token) !== socket.id) {
+        return;
+      }
+
       socketIdsByToken.delete(token);
 
       void (async () => {

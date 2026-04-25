@@ -231,6 +231,16 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
       serverUrl: SERVER_URL,
       session: nextSession,
       onConnectStateChange: setSocketState,
+      onConnect: () => {
+        void bootstrapRoom(nextSession.roomCode, nextSession.token, { serverUrl: SERVER_URL })
+          .then((nextSnapshot) => {
+            setSnapshot(nextSnapshot);
+            setError(null);
+          })
+          .catch(() => {
+            /* The server also pushes a snapshot on connect; keep that path if bootstrap races a cold start. */
+          });
+      },
       onSnapshot: (nextSnapshot) => {
         setSnapshot(nextSnapshot);
         setError(null);

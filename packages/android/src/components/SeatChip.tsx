@@ -35,12 +35,13 @@ export function SeatChip({ name, bid, taken, isTurn = false, connected = true }:
 const s = StyleSheet.create({
   chip: {
     paddingVertical: 7,
-    paddingHorizontal: 9,
+    paddingHorizontal: 7,
     borderRadius: 13,
     gap: 3,
     backgroundColor: 'rgba(8,21,16,0.44)',
     borderWidth: 1,
     borderColor: 'rgba(248,226,187,0.11)',
+    overflow: 'hidden',
   },
   turn: {
     borderColor: 'rgba(245,210,146,0.55)',
@@ -49,7 +50,7 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   name: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
@@ -57,15 +58,17 @@ const s = StyleSheet.create({
     opacity: 0.9,
     flexShrink: 1,
   },
-  stats: { flexDirection: 'row', gap: 4, marginTop: 1 },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: 1 },
   pill: {
     paddingVertical: 1,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: 99,
     backgroundColor: 'rgba(255,244,218,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(245,223,183,0.1)',
+    minWidth: 38,
+    alignItems: 'center',
   },
-  pillText: { fontSize: 10, color: '#f5e7cb' },
+  pillText: { fontSize: 9, color: '#f5e7cb' },
   pillValue: { color: T.goldSoft, fontWeight: '700' },
 });

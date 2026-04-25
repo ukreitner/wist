@@ -33,7 +33,7 @@ const s = StyleSheet.create({
   },
   northRow: { height: 52, alignItems: 'center', justifyContent: 'center' },
   middleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  side: { width: 80, justifyContent: 'center' },
-  centerWrap: { flex: 1, borderRadius: 18, overflow: 'hidden' },
+  side: { width: 96, justifyContent: 'center' },
+  centerWrap: { flex: 1, borderRadius: 18, overflow: 'visible' },
   southRow: { height: 52, alignItems: 'center', justifyContent: 'center' },
 });

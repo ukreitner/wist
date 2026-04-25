@@ -11,44 +11,51 @@ import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
 import type { Seat } from '@wist/core';
 
-function TrickCardSlot({ seat, name, rank, suit }: { seat: Seat; name: string; rank: number; suit: 'C' | 'D' | 'H' | 'S' }) {
-  const pos =
-    seat === 'N' ? { top: 6, left: '50%' as const, transform: [{ translateX: -29 }] } :
-    seat === 'E' ? { right: 6, top: '42%' as const, transform: [{ translateY: -40 }] } :
-    seat === 'S' ? { bottom: 6, left: '50%' as const, transform: [{ translateX: -29 }] } :
-    { left: 6, top: '42%' as const, transform: [{ translateY: -40 }] };
+const SEATS: Seat[] = ['N', 'E', 'W', 'S'];
 
+function TrickCardSlot({ seat, name, rank, suit }: { seat: Seat; name: string; rank: number; suit: 'C' | 'D' | 'H' | 'S' }) {
   return (
-    <View style={[s.trickSlot, pos]}>
+    <View style={s.trickSlot}>
       <View style={s.trickPill}>
         <Text style={s.trickPillText}>{name}</Text>
       </View>
-      <WistCard rank={rank} suit={suit} width={58} />
+      <WistCard rank={rank} suit={suit} width={48} />
     </View>
   );
 }
 
 export default function PlayScreen({ navigation }: NavProps<'Play'>) {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
-  const { playerForSeat, selfName, contractText, hand, legalPlayCardCodes, currentTrick, completedTricks, currentBets, currentTaken, currentTurn, recentlyReceivedCardCodes, playCard, error, clearError } = useDemoState();
+  const { playerForSeat, selfName, selfSeat, contractText, hand, legalPlayCardCodes, currentTrick, completedTricks, currentBets, currentTaken, currentTurn, recentlyReceivedCardCodes, playCard, error, clearError } = useDemoState();
   const playable = useMemo(() => new Set(legalPlayCardCodes), [legalPlayCardCodes]);
   const selectedCardInfo = selectedCard ? hand.find((entry) => entry.code === selectedCard) ?? null : null;
   const latestTrick = completedTricks.at(-1) ?? null;
 
   const TrickCenter = (
     <View style={s.trickCenter}>
-      {currentTrick?.plays.map((play: { seat: Seat; card: { code: string; rank: number; suit: 'C' | 'D' | 'H' | 'S' } }) => (
-        <TrickCardSlot
-          key={`${play.seat}-${play.card.code}`}
-          seat={play.seat}
-          name={playerForSeat(play.seat).name}
-          rank={play.card.rank}
-          suit={play.card.suit}
-        />
-      ))}
+      <View style={s.trickGrid}>
+        {SEATS.map((seat) => {
+          const play = currentTrick?.plays.find((entry) => entry.seat === seat);
+
+          return (
+            <View key={`trick-slot-${seat}`} style={[s.trickQuadrant, currentTurn === seat && s.trickQuadrantTurn]}>
+              {play ? (
+                <TrickCardSlot
+                  seat={play.seat}
+                  name={playerForSeat(play.seat).name}
+                  rank={play.card.rank}
+                  suit={play.card.suit}
+                />
+              ) : currentTurn === seat ? (
+                <Text style={s.pendingTurnText}>{selfSeat === seat ? 'You' : playerForSeat(seat).name}</Text>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
       {currentTurn ? (
         <View style={s.yourTurnPill}>
-          <Text style={s.yourTurnText}>{currentTurn === 'W' ? '▶ Your turn' : `${playerForSeat(currentTurn).name} to play`}</Text>
+          <Text style={s.yourTurnText}>{currentTurn === selfSeat ? '▶ Your turn' : `${playerForSeat(currentTurn).name} to play`}</Text>
         </View>
       ) : null}
     </View>
@@ -114,7 +121,7 @@ export default function PlayScreen({ navigation }: NavProps<'Play'>) {
           </View>
         ) : (
           <View style={s.hintPanel}>
-            <Text style={s.hintText}>{currentTurn === 'W' ? 'Tap a highlighted card to play.' : `${playerForSeat(currentTurn ?? 'N').name} is up.`}</Text>
+            <Text style={s.hintText}>{currentTurn === selfSeat ? 'Tap a highlighted card to play.' : `${playerForSeat(currentTurn ?? 'N').name} is up.`}</Text>
           </View>
         )}
         {error ? <Text style={s.errorText}>{error}</Text> : null}
@@ -131,10 +138,19 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(4,18,13,0.2)',
     borderWidth: 1,
     borderColor: 'rgba(245,223,183,0.09)',
-    position: 'relative',
+    padding: 8,
+    gap: 6,
   },
+  trickGrid: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  trickQuadrant: {
+    width: '48%',
+    minHeight: 80,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trickQuadrantTurn: { backgroundColor: 'rgba(246,208,125,0.08)' },
   trickSlot: {
-    position: 'absolute',
     alignItems: 'center',
     gap: 3,
   },
@@ -151,11 +167,9 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.7,
   },
+  pendingTurnText: { color: 'rgba(255,230,173,0.78)', fontWeight: '800', fontSize: 11, textTransform: 'uppercase' },
   yourTurnPill: {
-    position: 'absolute',
-    bottom: 8,
-    left: '50%',
-    transform: [{ translateX: -50 }],
+    alignSelf: 'center',
     paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: 99,

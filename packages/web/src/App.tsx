@@ -117,6 +117,18 @@ export default function App() {
       serverUrl: SERVER_URL,
       session: nextSession,
       onConnectStateChange: setSocketState,
+      onConnect: () => {
+        void bootstrapRoom(nextSession.roomCode, nextSession.token, { serverUrl: SERVER_URL })
+          .then((nextSnapshot) => {
+            startTransition(() => {
+              setSnapshot(nextSnapshot);
+              setError(null);
+            });
+          })
+          .catch(() => {
+            /* The socket connection also pushes a snapshot; ignore bootstrap races during cold starts. */
+          });
+      },
       onSnapshot: (nextSnapshot) => {
         startTransition(() => {
           setSnapshot(nextSnapshot);

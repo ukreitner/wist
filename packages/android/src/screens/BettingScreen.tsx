@@ -8,10 +8,12 @@ import { ChipBtn } from '../components/ChipBtn';
 import { HandFan } from '../components/HandFan';
 import type { NavProps } from '../nav';
 import { useDemoState } from '../demo-state';
+import type { Seat } from '@wist/core';
+
+const SEATS: Seat[] = ['N', 'E', 'S', 'W'];
 
 export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
   const { playerForSeat, selfName, contractText, hand, bettingValues, minimumBet, currentBets, currentTaken, currentTurn, recentlyReceivedCardCodes, submitBet, error, clearError } = useDemoState();
-  const otherSeats = (['N', 'E', 'S', 'W'] as const).filter((seat) => seat !== 'W');
   const total = Object.values(currentBets).reduce<number>((sum, value) => sum + (value ?? 0), 0);
   const forbidden = 13 - total;
   const betCount = Object.values(currentBets).filter((value) => value !== undefined).length;
@@ -25,10 +27,10 @@ export default function BettingScreen({ navigation }: NavProps<'Betting'>) {
         <Text style={s.centerBid}>{contractText ?? 'Waiting for contract'}</Text>
       </View>
       <View style={s.centerGrid}>
-        {[...otherSeats, 'W' as const].map((seat) => (
+        {SEATS.map((seat) => (
           <View key={seat} style={[s.centerCell, currentTurn === seat && s.centerCellMe]}>
             <Text style={s.centerCellSeat}>{currentTurn === seat ? '▶ TURN' : seat}</Text>
-            <Text style={s.centerCellName} numberOfLines={1}>{seat === 'W' ? selfName : playerForSeat(seat).name}</Text>
+            <Text style={s.centerCellName} numberOfLines={1}>{playerForSeat(seat).name}</Text>
             <Text style={s.centerCellAction}>{currentBets[seat] ?? '?'}</Text>
           </View>
         ))}

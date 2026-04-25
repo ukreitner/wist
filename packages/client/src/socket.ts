@@ -7,6 +7,7 @@ export interface RoomSocketOptions {
   serverUrl?: string;
   session: SessionHandle;
   onConnectStateChange?: (state: ConnectState) => void;
+  onConnect?: () => void;
   onSnapshot?: (snapshot: RoomSnapshot) => void;
   onPresence?: (players: SnapshotPlayer[]) => void;
   onError?: (message: string) => void;
@@ -16,6 +17,7 @@ export const connectRoomSocket = ({
   serverUrl,
   session,
   onConnectStateChange,
+  onConnect,
   onSnapshot,
   onPresence,
   onError
@@ -40,9 +42,18 @@ export const connectRoomSocket = ({
 
   socket.on("connect", () => {
     onConnectStateChange?.("connected");
+    onConnect?.();
   });
 
   socket.on("disconnect", () => {
+    onConnectStateChange?.("disconnected");
+  });
+
+  socket.io.on("reconnect_attempt", () => {
+    onConnectStateChange?.("connecting");
+  });
+
+  socket.io.on("reconnect_error", () => {
     onConnectStateChange?.("disconnected");
   });
 
