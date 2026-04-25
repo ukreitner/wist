@@ -76,6 +76,7 @@ export default function App() {
   const heldTrickKeyRef = useRef<string | null>(null);
   const heldTrickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextHandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousHandRef = useRef<{ handId: string; phase: string; cardCodes: string[] } | null>(null);
   const savedNickname = loadProfileNickname();
   const [session, setSession] = useState<SessionHandle | null>(null);
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
@@ -91,6 +92,7 @@ export default function App() {
   const [selectedAuctionTricks, setSelectedAuctionTricks] = useState<number | null>(null);
   const [heldCompletedTrick, setHeldCompletedTrick] = useState<Trick | null>(null);
   const [lastCompletedTrick, setLastCompletedTrick] = useState<Trick | null>(null);
+  const [recentlyReceivedCardCodes, setRecentlyReceivedCardCodes] = useState<string[]>([]);
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>(() => loadRecentRooms());
   const [archives, setArchives] = useState<MatchArchive[]>(() => loadArchives());
   const [selectedArchiveId, setSelectedArchiveId] = useState<string | null>(null);
@@ -371,6 +373,44 @@ export default function App() {
       seatPlayers.set(player.seat, player);
     }
   });
+
+  useEffect(() => {
+    if (!privateView || !currentHand) {
+      previousHandRef.current = null;
+      setRecentlyReceivedCardCodes((current) => (current.length > 0 ? [] : current));
+      return;
+    }
+
+    const handId = String(currentHand.id);
+    const phase = currentHand.phase;
+    const cardCodes = privateView.hand.map((card) => card.code);
+    const previous = previousHandRef.current;
+
+    if (previous?.handId !== handId) {
+      setRecentlyReceivedCardCodes((current) => (current.length > 0 ? [] : current));
+    }
+
+    if (previous?.handId === handId && previous.phase === "passing" && phase !== "passing") {
+      const previousCodes = new Set(previous.cardCodes);
+      const receivedCodes = cardCodes.filter((code) => !previousCodes.has(code));
+
+      if (receivedCodes.length > 0) {
+        setRecentlyReceivedCardCodes(receivedCodes);
+      }
+    }
+
+    previousHandRef.current = { handId, phase, cardCodes };
+  }, [currentHand?.id, currentHand?.phase, privateView]);
+
+  useEffect(() => {
+    if (recentlyReceivedCardCodes.length === 0) {
+      return;
+    }
+
+    const timeout = setTimeout(() => setRecentlyReceivedCardCodes([]), 12000);
+
+    return () => clearTimeout(timeout);
+  }, [recentlyReceivedCardCodes]);
 
   const fallbackPlayerName = (seat: Seat): string => `${t.player} ${SEATS.indexOf(seat) + 1}`;
   const playerNameForSeat = (seat: Seat): string => seatPlayers.get(seat)?.nickname ?? fallbackPlayerName(seat);
@@ -1187,6 +1227,7 @@ export default function App() {
     const legalCardCodes = new Set(privateView.legalActions.playing?.cardCodes ?? []);
     const canPass = Boolean(privateView.legalActions.passSelection);
     const sortedHand = sortCards(privateView.hand);
+    const highlightedCardCodes = new Set(recentlyReceivedCardCodes);
 
     return (
       <section className="panel hand-panel">
@@ -1206,6 +1247,7 @@ export default function App() {
             const selected = selectedPassCards.includes(card.code);
             const playable = legalCardCodes.has(card.code);
             const disabled = canPass ? false : legalCardCodes.size > 0 ? !playable : true;
+            const highlighted = highlightedCardCodes.has(card.code);
 
             return (
               <PlayingCard
@@ -1213,6 +1255,7 @@ export default function App() {
                 card={card}
                 selected={selected}
                 playable={playable}
+                highlighted={highlighted}
                 disabled={disabled}
                 onClick={() => {
                   if (canPass) {

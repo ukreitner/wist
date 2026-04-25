@@ -6,6 +6,7 @@ interface PlayingCardProps {
   disabled?: boolean;
   selected?: boolean;
   playable?: boolean;
+  highlighted?: boolean;
   onClick?: () => void;
 }
 
@@ -217,6 +218,7 @@ export default function PlayingCard({
   disabled = false,
   selected = false,
   playable = false,
+  highlighted = false,
   onClick
 }: PlayingCardProps) {
   const fill = suitColor(card.suit);
@@ -234,7 +236,8 @@ export default function PlayingCard({
         faceDown ? "is-back" : "",
         disabled ? "is-disabled" : "",
         selected ? "is-selected" : "",
-        playable ? "is-playable" : ""
+        playable ? "is-playable" : "",
+        highlighted ? "is-highlighted" : ""
       ]
         .filter(Boolean)
         .join(" ")}
@@ -254,6 +257,7 @@ export default function PlayingCard({
             </linearGradient>
           </defs>
           <rect x="8" y="8" width="164" height="244" rx="20" fill={`url(#${gradientId})`} stroke="#d3c2a6" strokeWidth="4" />
+          {highlighted ? <rect x="12" y="12" width="156" height="236" rx="18" fill="none" stroke="#d5a652" strokeWidth="8" opacity="0.92" /> : null}
           <rect x="18" y="18" width="144" height="224" rx="16" fill="none" stroke="#eadbc0" strokeWidth="2" />
           <rect x="28" y="28" width="124" height="204" rx="12" fill="none" stroke="#f4ecdd" strokeWidth="1.5" />
           <CornerMark rank={rank} suit={symbol} fill={fill} />
