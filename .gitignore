@@ -10,6 +10,7 @@ test-results
 .android-avd
 .android-sdk
 .android-user
+.gradle-home
 emulator-current.png
 latest-logcat.txt
 latest-ui.xml
