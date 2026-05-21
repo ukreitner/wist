@@ -11,6 +11,28 @@ type Queryable = {
 };
 
 const boolValue = (value: unknown): boolean => value === true || value === "true" || value === 1;
+const tableNames = ["rooms", "sessions", "events"] as const;
+const supabaseDataApiRoles = ["anon", "authenticated"] as const;
+
+const getErrorCode = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null && "code" in error ? String(error.code) : undefined;
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : typeof error === "string" ? error : "";
+
+const isUnsupportedOptionalSchemaFeature = (error: unknown): boolean => {
+  const code = getErrorCode(error);
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    code === "0A000" ||
+    code === "42601" ||
+    message.includes("not supported") ||
+    message.includes("syntax error")
+  );
+};
+const isMissingPgRolesCatalog = (error: unknown): boolean =>
+  getErrorMessage(error).toLowerCase().includes('relation "pg_roles" does not exist');
 
 export class PostgresRoomStore implements RoomStore {
   private constructor(private readonly pool: Queryable) {}
@@ -56,6 +78,51 @@ export class PostgresRoomStore implements RoomStore {
         UNIQUE(room_id, seq)
       );
     `);
+    await this.lockDownSupabaseDataApi();
+  }
+
+  private async lockDownSupabaseDataApi(): Promise<void> {
+    // Wist stores room/session tokens server-side only. Supabase's Data API must not expose these public-schema tables.
+    for (const tableName of tableNames) {
+      await this.runOptionalSchemaQuery(`ALTER TABLE public.${tableName} ENABLE ROW LEVEL SECURITY`);
+
+      for (const roleName of supabaseDataApiRoles) {
+        if (await this.roleExists(roleName)) {
+          await this.pool.query(`REVOKE ALL PRIVILEGES ON TABLE public.${tableName} FROM ${roleName}`);
+        }
+      }
+    }
+  }
+
+  private async roleExists(roleName: string): Promise<boolean> {
+    try {
+      const result = await this.pool.query<{ exists: boolean }>(
+        "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS exists",
+        [roleName]
+      );
+
+      return boolValue(result.rows[0]?.exists);
+    } catch (error) {
+      const code = getErrorCode(error);
+
+      if (code === "42P01" || isMissingPgRolesCatalog(error) || isUnsupportedOptionalSchemaFeature(error)) {
+        return false;
+      }
+
+      throw error;
+    }
+  }
+
+  private async runOptionalSchemaQuery(query: string): Promise<void> {
+    try {
+      await this.pool.query(query);
+    } catch (error) {
+      if (isUnsupportedOptionalSchemaFeature(error)) {
+        return;
+      }
+
+      throw error;
+    }
   }
 
   async loadRooms(): Promise<RoomState[]> {
