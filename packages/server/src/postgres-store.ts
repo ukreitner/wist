@@ -13,6 +13,12 @@ type Queryable = {
 const boolValue = (value: unknown): boolean => value === true || value === "true" || value === 1;
 const tableNames = ["rooms", "sessions", "events"] as const;
 const supabaseDataApiRoles = ["anon", "authenticated"] as const;
+const defaultConnectionTimeoutMs = 10_000;
+const parsePositiveInteger = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 
 const getErrorCode = (error: unknown): string | undefined =>
   typeof error === "object" && error !== null && "code" in error ? String(error.code) : undefined;
@@ -38,7 +44,10 @@ export class PostgresRoomStore implements RoomStore {
   private constructor(private readonly pool: Queryable) {}
 
   static async create(config: { connectionString?: string; pool?: Queryable }): Promise<PostgresRoomStore> {
-    const pool = config.pool ?? new Pool({ connectionString: config.connectionString });
+    const pool = config.pool ?? new Pool({
+      connectionString: config.connectionString,
+      connectionTimeoutMillis: parsePositiveInteger(process.env.DATABASE_CONNECTION_TIMEOUT_MS, defaultConnectionTimeoutMs)
+    });
     const store = new PostgresRoomStore(pool);
     await store.ensureSchema();
     return store;
