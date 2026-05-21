@@ -76,6 +76,13 @@ These notes summarize the working style, product taste, and implementation lesso
   - Completed hand with score table
 - Treat Vite websocket `ECONNRESET` or `ECONNABORTED` messages during Playwright shutdown as non-blocking if tests pass; they usually come from browser contexts closing.
 
+## Render/Supabase Recovery Notes
+
+- 2026-05-21: Render deploys failed with `ENOTFOUND tenant/user postgres.riiadctpmfrggdgvosck not found` because the Supabase free project had paused. Resume the Supabase project first, wait for it to leave "Coming up", then manually deploy latest commit on Render.
+- A Render `/health` timeout while the latest deploy is failed does not prove the new code is bad; check Render logs and Supabase project status before patching.
+- After recovery, verify more than health: create a room through `POST /api/rooms`, then bootstrap it with `GET /api/rooms/:code/bootstrap?token=...` so Postgres writes and reads are proven.
+- Current recovery commit deployed successfully on Render: `e0edbb6 Bound Postgres startup connection time`.
+
 ## Current Project State At This Note
 
 - Repository: `https://github.com/ukreitner/wist`
