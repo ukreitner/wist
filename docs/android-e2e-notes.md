@@ -47,9 +47,18 @@
 
 - Verified:
   - `npm run typecheck`
+  - `npm run typecheck -w wist-app`
   - `npm run build`
+  - `npm run test`
   - `npm run test -w @wist/server`
   - `npm run test:e2e`
+- 2026-05-23 reconnect recovery build verified:
+  - commit: `c142785 Harden reconnect resync`
+  - public Render `/health` returns `{ "ok": true }`
+  - public web bundle updated to `index-B2EBvgFV.js`
+  - public API can create and bootstrap a throwaway room
+  - release APK installs and launches on emulator
+  - release APK created hosted room `6J5AG4` and showed `Connected`
 - Public Render deployment verified:
   - service URL: `https://wist-z1k0.onrender.com`
   - `/health` returns `{ "ok": true }`
@@ -98,6 +107,9 @@
   - `EXPO_PUBLIC_SERVER_URL=https://wist-z1k0.onrender.com npm run build:apk:gradle`
 - Current local APK artifact path after the first successful build:
   - `artifacts/wist-android-preview-v1.apk`
+- Current reconnect-hardened APK artifact:
+  - `artifacts/wist-android-reconnect-c142785.apk`
+  - SHA-256: `884f3d3db82b75e0aa6798e031079b973995afcae15b172e8c46c001185f79eb`
 - Manual local release build command used successfully from `packages/android/android`:
   - `JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/ukreitner/Documents/Codex/2026-04-23-github-plugin-github-openai-curated-test-2/wist-android/.android-sdk ANDROID_SDK_ROOT=/Users/ukreitner/Documents/Codex/2026-04-23-github-plugin-github-openai-curated-test-2/wist-android/.android-sdk NODE_ENV=production EXPO_PUBLIC_SERVER_URL=https://wist-z1k0.onrender.com ./gradlew assembleRelease --console=plain --no-daemon`
 - First EAS build on a new machine/account may ask you to log in, link/create the Expo project, and generate Android credentials.

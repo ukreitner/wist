@@ -82,6 +82,11 @@ These notes summarize the working style, product taste, and implementation lesso
 - A Render `/health` timeout while the latest deploy is failed does not prove the new code is bad; check Render logs and Supabase project status before patching.
 - After recovery, verify more than health: create a room through `POST /api/rooms`, then bootstrap it with `GET /api/rooms/:code/bootstrap?token=...` so Postgres writes and reads are proven.
 - Current recovery commit deployed successfully on Render: `e0edbb6 Bound Postgres startup connection time`.
+- 2026-05-23: Players reported that after a Render restart they had to refresh after every move. Fix deployed in `c142785 Harden reconnect resync`.
+- The reconnect fix has two parts:
+  - clients now listen for `event.appended`, resync after reconnect/action acks, and no longer force websocket-only transport
+  - server presence updates now persist only session connection state instead of rewriting the whole room and event history
+- This makes restarts/reconnects survivable, but Render free can still cold-start or restart. If this remains painful during real games, the product fix is an always-on service/paid Render instance, not more client-side retry glue.
 
 ## Current Project State At This Note
 
