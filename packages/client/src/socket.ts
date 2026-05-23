@@ -10,6 +10,7 @@ export interface RoomSocketOptions {
   onConnect?: () => void;
   onSnapshot?: (snapshot: RoomSnapshot) => void;
   onPresence?: (players: SnapshotPlayer[]) => void;
+  onEventAppended?: () => void;
   onError?: (message: string) => void;
 }
 
@@ -20,20 +21,19 @@ export const connectRoomSocket = ({
   onConnect,
   onSnapshot,
   onPresence,
+  onEventAppended,
   onError
 }: RoomSocketOptions): Socket => {
   onConnectStateChange?.("connecting");
 
   const socket = serverUrl
     ? io(serverUrl, {
-        transports: ["websocket"],
         auth: {
           roomCode: session.roomCode,
           token: session.token
         }
       })
     : io({
-        transports: ["websocket"],
         auth: {
           roomCode: session.roomCode,
           token: session.token
@@ -63,6 +63,10 @@ export const connectRoomSocket = ({
 
   socket.on("presence", (players: SnapshotPlayer[]) => {
     onPresence?.(players);
+  });
+
+  socket.on("event.appended", () => {
+    onEventAppended?.();
   });
 
   socket.on("error", (payload: { message: string }) => {

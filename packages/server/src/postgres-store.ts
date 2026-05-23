@@ -280,6 +280,28 @@ export class PostgresRoomStore implements RoomStore {
     });
   }
 
+  async updateSessionConnection(room: RoomState, session: PlayerSession): Promise<void> {
+    await this.runInTransaction(async (query) => {
+      await query(
+        `
+          UPDATE rooms
+          SET updated_at = $1, status = $2, snapshot_json = $3
+          WHERE id = $4
+        `,
+        [room.updatedAt, room.status, JSON.stringify({ match: room.match }), room.id]
+      );
+
+      await query(
+        `
+          UPDATE sessions
+          SET connected = $1, last_seen_at = $2
+          WHERE id = $3
+        `,
+        [session.connected, session.lastSeenAt, session.id]
+      );
+    });
+  }
+
   async deleteRoom(roomId: string): Promise<void> {
     await this.pool.query("DELETE FROM rooms WHERE id = $1", [roomId]);
   }

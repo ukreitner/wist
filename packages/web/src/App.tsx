@@ -33,6 +33,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 const SEATS: Seat[] = ["N", "E", "S", "W"];
 const SUIT_ORDER: Record<Card["suit"], number> = { C: 0, D: 1, H: 2, S: 3 };
 const TRUMP_ORDER: Record<Trump, number> = { C: 0, D: 1, H: 2, S: 3, NT: 4 };
+type ActionAck = { ok: true } | { ok: false; message: string };
 
 const isPrivateView = (view: PrivatePlayerView | PublicMatchState): view is PrivatePlayerView =>
   "viewerSeat" in view;
@@ -76,6 +77,7 @@ export default function App() {
   const heldTrickKeyRef = useRef<string | null>(null);
   const heldTrickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextHandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousHandRef = useRef<{ handId: string; phase: string; cardCodes: string[] } | null>(null);
   const savedNickname = loadProfileNickname();
   const [session, setSession] = useState<SessionHandle | null>(null);
@@ -102,6 +104,27 @@ export default function App() {
   const isRtl = locale === "he";
   const socketStateLabel = socketState === "connected" ? t.connected : socketState === "connecting" ? t.connection : t.away;
 
+  const applySnapshot = (nextSnapshot: RoomSnapshot): void => {
+    startTransition(() => {
+      setSnapshot(nextSnapshot);
+      setError(null);
+    });
+  };
+
+  const resyncSession = (nextSession: SessionHandle, delayMs = 0): void => {
+    if (resyncTimerRef.current) {
+      clearTimeout(resyncTimerRef.current);
+    }
+
+    resyncTimerRef.current = setTimeout(() => {
+      void bootstrapRoom(nextSession.roomCode, nextSession.token, { serverUrl: SERVER_URL })
+        .then(applySnapshot)
+        .catch(() => {
+          /* Socket recovery can briefly race Render cold starts; keep the next reconnect attempt alive. */
+        });
+    }, delayMs);
+  };
+
   const rememberSession = (nextSession: SessionHandle): void => {
     void browserSessionStore.save(nextSession);
     saveProfileNickname(nextSession.nickname);
@@ -118,27 +141,18 @@ export default function App() {
       session: nextSession,
       onConnectStateChange: setSocketState,
       onConnect: () => {
-        void bootstrapRoom(nextSession.roomCode, nextSession.token, { serverUrl: SERVER_URL })
-          .then((nextSnapshot) => {
-            startTransition(() => {
-              setSnapshot(nextSnapshot);
-              setError(null);
-            });
-          })
-          .catch(() => {
-            /* The socket connection also pushes a snapshot; ignore bootstrap races during cold starts. */
-          });
+        resyncSession(nextSession);
       },
       onSnapshot: (nextSnapshot) => {
-        startTransition(() => {
-          setSnapshot(nextSnapshot);
-          setError(null);
-        });
+        applySnapshot(nextSnapshot);
       },
       onPresence: (players: SnapshotPlayer[]) => {
         startTransition(() => {
           setSnapshot((current) => (current ? { ...current, players } : current));
         });
+      },
+      onEventAppended: () => {
+        resyncSession(nextSession, 150);
       },
       onError: (message) => {
         setError(message);
@@ -256,6 +270,10 @@ export default function App() {
       if (nextHandTimerRef.current) {
         clearTimeout(nextHandTimerRef.current);
       }
+
+      if (resyncTimerRef.current) {
+        clearTimeout(resyncTimerRef.current);
+      }
     },
     []
   );
@@ -323,7 +341,35 @@ export default function App() {
   };
 
   const emit = (eventName: string, payload?: unknown): void => {
-    socketRef.current?.emit(eventName, payload);
+    if (!session) {
+      return;
+    }
+
+    const socket = socketRef.current;
+
+    if (!socket?.connected) {
+      setSocketState("connecting");
+      setError("Connection hiccup. Reconnecting now; try that move again in a moment.");
+      connectSocket(session);
+      resyncSession(session);
+      return;
+    }
+
+    socket.timeout(8000).emit(eventName, payload, (ackError: Error | null, ack?: ActionAck) => {
+      if (ackError) {
+        setError("Connection hiccup. Resyncing the table now.");
+        resyncSession(session);
+        return;
+      }
+
+      if (!ack?.ok) {
+        setError(ack?.message ?? "The server did not confirm that move.");
+        resyncSession(session);
+        return;
+      }
+
+      resyncSession(session, 150);
+    });
   };
 
   const parsedInitialScores = (): Record<Seat, number> =>

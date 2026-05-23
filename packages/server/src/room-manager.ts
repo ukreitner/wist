@@ -159,6 +159,19 @@ export class RoomManager {
     return room;
   }
 
+  private async persistSessionConnection(room: RoomState, session: PlayerSession): Promise<RoomState> {
+    room.updatedAt = nowIso();
+
+    if (this.store.updateSessionConnection) {
+      await this.store.updateSessionConnection(room, session);
+    } else {
+      await this.store.saveRoom(room);
+    }
+
+    this.indexRoom(room);
+    return room;
+  }
+
   private indexRoom(room: RoomState): void {
     this.roomsByCode.set(room.code, room);
 
@@ -561,7 +574,7 @@ export class RoomManager {
     const { room, session } = this.getRoomForToken(token);
     session.connected = connected;
     session.lastSeenAt = nowIso();
-    return this.persist(room);
+    return this.persistSessionConnection(room, session);
   }
 
   async transferHost(roomCode: string): Promise<RoomState | null> {

@@ -8,6 +8,8 @@ import { RoomManager } from "./room-manager.js";
 import { TEST_PRESETS } from "./test-presets.js";
 import type { RoomSnapshot, StartMatchOptions } from "./types.js";
 
+type ActionAck = { ok: true } | { ok: false; message: string };
+
 export interface AppServerConfig {
   port?: number;
   dbPath?: string;
@@ -65,8 +67,10 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
     io.to(roomCode).emit("presence", buildPresence(roomCode));
   };
 
+  const errorMessage = (error: unknown): string => error instanceof Error ? error.message : "Unknown server error.";
+
   const emitError = (socketId: string, error: unknown): void => {
-    const message = error instanceof Error ? error.message : "Unknown server error.";
+    const message = errorMessage(error);
     io.to(socketId).emit("error", { message });
   };
 
@@ -221,13 +225,16 @@ export const createAppServer = async (config: AppServerConfig = {}) => {
       }
     })();
 
-    const guarded = <Payload>(handler: (payload: Payload) => Promise<void> | void) => (payload: Payload): void => {
+    const guarded = <Payload>(handler: (payload: Payload) => Promise<void> | void) =>
+      (payload: Payload, ack?: (result: ActionAck) => void): void => {
       void Promise.resolve(handler(payload))
         .then(() => {
           pushRoomSnapshot(roomCode);
+          ack?.({ ok: true });
         })
         .catch((error) => {
           emitError(socket.id, error);
+          ack?.({ ok: false, message: errorMessage(error) });
         });
     };
 

@@ -213,6 +213,28 @@ export class SqliteRoomStore implements RoomStore {
     this.flush();
   }
 
+  async updateSessionConnection(room: RoomState, session: PlayerSession): Promise<void> {
+    this.database.run(
+      `
+        UPDATE rooms
+        SET updatedAt = ?, status = ?, snapshotJson = ?
+        WHERE id = ?
+      `,
+      [room.updatedAt, room.status, JSON.stringify({ match: room.match }), room.id]
+    );
+
+    this.database.run(
+      `
+        UPDATE sessions
+        SET connected = ?, lastSeenAt = ?
+        WHERE id = ?
+      `,
+      [session.connected ? 1 : 0, session.lastSeenAt, session.id]
+    );
+
+    this.flush();
+  }
+
   async deleteRoom(roomId: string): Promise<void> {
     this.database.run("DELETE FROM events WHERE roomId = ?", [roomId]);
     this.database.run("DELETE FROM sessions WHERE roomId = ?", [roomId]);

@@ -175,9 +175,11 @@ const fallbackPlayer = (seat: Seat): DemoPlayer => ({
 });
 
 const formatBid = (bid: { tricks: number; trump: Trump }): string => `${bid.tricks}${SUIT_SYMBOL[bid.trump]}`;
+type ActionAck = { ok: true } | { ok: false; message: string };
 
 export function DemoStateProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
+  const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [session, setSession] = useState<SessionHandle | null>(null);
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
@@ -211,6 +213,9 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
 
     return () => {
       socketRef.current?.disconnect();
+      if (resyncTimerRef.current) {
+        clearTimeout(resyncTimerRef.current);
+      }
     };
   }, []);
 
@@ -225,6 +230,25 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
     setProfileNickname(nextSession.nickname);
   };
 
+  const applySnapshot = (nextSnapshot: RoomSnapshot): void => {
+    setSnapshot(nextSnapshot);
+    setError(null);
+  };
+
+  const resyncSession = (nextSession: SessionHandle, delayMs = 0): void => {
+    if (resyncTimerRef.current) {
+      clearTimeout(resyncTimerRef.current);
+    }
+
+    resyncTimerRef.current = setTimeout(() => {
+      void bootstrapRoom(nextSession.roomCode, nextSession.token, { serverUrl: SERVER_URL })
+        .then(applySnapshot)
+        .catch(() => {
+          /* Socket recovery can briefly race Render cold starts; keep the next reconnect attempt alive. */
+        });
+    }, delayMs);
+  };
+
   const connectSocket = (nextSession: SessionHandle): void => {
     socketRef.current?.disconnect();
     socketRef.current = connectRoomSocket({
@@ -232,21 +256,16 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
       session: nextSession,
       onConnectStateChange: setSocketState,
       onConnect: () => {
-        void bootstrapRoom(nextSession.roomCode, nextSession.token, { serverUrl: SERVER_URL })
-          .then((nextSnapshot) => {
-            setSnapshot(nextSnapshot);
-            setError(null);
-          })
-          .catch(() => {
-            /* The server also pushes a snapshot on connect; keep that path if bootstrap races a cold start. */
-          });
+        resyncSession(nextSession);
       },
       onSnapshot: (nextSnapshot) => {
-        setSnapshot(nextSnapshot);
-        setError(null);
+        applySnapshot(nextSnapshot);
       },
       onPresence: (players: SnapshotPlayer[]) => {
         setSnapshot((current) => (current ? { ...current, players } : current));
+      },
+      onEventAppended: () => {
+        resyncSession(nextSession, 150);
       },
       onError: (message) => {
         setError(message);
@@ -308,7 +327,35 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
   };
 
   const emit = (eventName: string, payload?: unknown): void => {
-    socketRef.current?.emit(eventName, payload);
+    if (!session) {
+      return;
+    }
+
+    const socket = socketRef.current;
+
+    if (!socket?.connected) {
+      setSocketState("connecting");
+      setError("Connection hiccup. Reconnecting now; try that move again in a moment.");
+      connectSocket(session);
+      resyncSession(session);
+      return;
+    }
+
+    socket.timeout(8000).emit(eventName, payload, (ackError: Error | null, ack?: ActionAck) => {
+      if (ackError) {
+        setError("Connection hiccup. Resyncing the table now.");
+        resyncSession(session);
+        return;
+      }
+
+      if (!ack?.ok) {
+        setError(ack?.message ?? "The server did not confirm that move.");
+        resyncSession(session);
+        return;
+      }
+
+      resyncSession(session, 150);
+    });
   };
 
   const privateView = snapshot && isPrivateView(snapshot.view) ? snapshot.view : null;
